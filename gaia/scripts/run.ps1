@@ -28,7 +28,9 @@ $backend = Start-Process -FilePath $Python -ArgumentList '-m', 'gaia', '--port',
 try {
     Write-Host -NoNewline 'Starting GAIA'
     $ready = $false
-    foreach ($_ in 1..60) {
+    # Do not name the loop variable $_ — it shadows the automatic pipeline
+    # variable and breaks anything inside the loop that relies on it.
+    foreach ($attempt in 1..60) {
         try {
             Invoke-WebRequest -Uri "$url/api/health" -UseBasicParsing -TimeoutSec 2 | Out-Null
             $ready = $true

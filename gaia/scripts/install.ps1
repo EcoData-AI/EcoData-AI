@@ -39,7 +39,11 @@ foreach ($candidate in @('python', 'python3', 'py')) {
     } catch { }
 }
 if (-not $python) { Fail 'Python 3.10+ is required. Install it from python.org, then re-run.' }
-Ok "Python $(& $python -c 'import sys; print(\".\".join(map(str, sys.version_info[:3])))') ($python)"
+# Quote carefully: the PowerShell string is double-quoted so the Python source
+# inside it can use single quotes. Backslash is not a PowerShell escape, so a
+# backslash-escaped quote here would reach Python verbatim and be a SyntaxError.
+$pythonVersion = & $python -c "import sys; print('.'.join(map(str, sys.version_info[:3])))"
+Ok "Python $pythonVersion ($python)"
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     Fail 'Node.js 18+ is required (https://nodejs.org).'
@@ -53,12 +57,21 @@ if ($Build -and -not (Get-Command cargo -ErrorAction SilentlyContinue)) {
 # --------------------------------------------------------------- backend
 
 Say 'Installing the backend'
-Push-Location (Join-Path $Root 'backend')
+$BackendDir = Join-Path $Root 'backend'
+# Absolute path: PowerShell's call operator does not resolve a bare relative
+# path the way a shell would.
+$VenvPython = Join-Path $BackendDir '.venv\Scripts\python.exe'
+Push-Location $BackendDir
 try {
-    if (-not (Test-Path '.venv')) { & $python -m venv .venv }
+    if (-not (Test-Path $VenvPython)) { & $python -m venv .venv }
+    if (-not (Test-Path $VenvPython)) {
+        Fail "Creating the virtualenv failed. Check that '$python -m venv' works."
+    }
     Ok 'virtualenv at backend\.venv'
-    & '.venv\Scripts\python.exe' -m pip install --quiet --upgrade pip setuptools wheel
-    & '.venv\Scripts\python.exe' -m pip install --quiet -e .
+    & $VenvPython -m pip install --quiet --upgrade pip setuptools wheel
+    if ($LASTEXITCODE -ne 0) { Fail 'Could not upgrade pip.' }
+    & $VenvPython -m pip install --quiet -e .
+    if ($LASTEXITCODE -ne 0) { Fail 'Installing the backend dependencies failed.' }
     Ok 'backend dependencies installed'
     if ((Test-Path '.env.example') -and -not (Test-Path '.env')) {
         Copy-Item '.env.example' '.env'
