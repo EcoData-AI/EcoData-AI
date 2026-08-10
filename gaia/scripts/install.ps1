@@ -28,21 +28,55 @@ function Fail { param($m) Write-Host "  [!!] $m" -ForegroundColor Red; exit 1 }
 
 Say 'Checking prerequisites'
 
+# Finding a usable Python is the one step where being clever backfires.
+#
+# Two rules, both learned the hard way:
+#
+# 1. NEVER put a double quote inside the -c argument. Windows PowerShell does
+#    not escape embedded double quotes when it builds a native command line,
+#    so the quotes are consumed as delimiters and Python receives a corrupted
+#    snippet — a SyntaxError it reports on stderr, which a 2>$null hides. The
+#    result is an interpreter that works perfectly being reported as missing.
+#
+# 2. Let Python decide whether Python is new enough, and answer through its
+#    exit code. Parsing a version string in PowerShell means string splitting,
+#    integer casts and comparison operators, every one of which is a chance to
+#    get a future version wrong. `sys.version_info >= (3, 10)` cannot be.
+#
+# There is deliberately no upper bound: a newer Python is supported unless a
+# dependency says otherwise, and the dependencies are checked by the test
+# suite rather than guessed at here.
 $python = $null
+$pythonVersion = $null
+$rejected = @()
+
 foreach ($candidate in @('python', 'python3', 'py')) {
-    $command = Get-Command $candidate -ErrorAction SilentlyContinue
-    if (-not $command) { continue }
-    try {
-        $version = & $candidate -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>$null
-        $parts = $version.Split('.')
-        if ([int]$parts[0] -eq 3 -and [int]$parts[1] -ge 10) { $python = $candidate; break }
-    } catch { }
+    if (-not (Get-Command $candidate -ErrorAction SilentlyContinue)) { continue }
+
+    $reported = & $candidate -c "import sys; print(sys.version.split()[0]); sys.exit(0 if sys.version_info >= (3, 10) else 1)" 2>$null
+
+    if ($LASTEXITCODE -eq 0 -and $reported) {
+        $python = $candidate
+        $pythonVersion = $reported
+        break
+    }
+    # Record near-misses so the failure message can be specific instead of
+    # telling someone with a working Python to go and install Python.
+    if ($reported) { $rejected += "$candidate reports $reported" }
 }
-if (-not $python) { Fail 'Python 3.10+ is required. Install it from python.org, then re-run.' }
-# Quote carefully: the PowerShell string is double-quoted so the Python source
-# inside it can use single quotes. Backslash is not a PowerShell escape, so a
-# backslash-escaped quote here would reach Python verbatim and be a SyntaxError.
-$pythonVersion = & $python -c "import sys; print('.'.join(map(str, sys.version_info[:3])))"
+
+if (-not $python) {
+    $detail = if ($rejected.Count) {
+        'Found, but too old: ' + ($rejected -join '; ') + '.'
+    } else {
+        'No working Python was found on PATH.'
+    }
+    Fail @"
+Python 3.10 or newer is required. $detail
+Install it from https://www.python.org/downloads/windows/ and tick
+'Add python.exe to PATH' in the installer. Avoid the Microsoft Store build.
+"@
+}
 Ok "Python $pythonVersion ($python)"
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
