@@ -1,0 +1,18 @@
+{
+  "name": "gaia-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "GAIA desktop shell (Tauri) — build orchestration for the app bundle",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "icons": "tauri icon src-tauri/icons/icon.png",
+    "backend:dev": "cd backend && .venv/bin/python -m gaia",
+    "frontend:dev": "npm --prefix frontend run dev",
+    "frontend:build": "npm --prefix frontend run build",
+    "test": "npm --prefix frontend run test && cd backend && .venv/bin/python -m pytest -q"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.1.0"
+  }
+}
