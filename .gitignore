@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Rust / Tauri
+target/
+gaia/src-tauri/target/
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+
+# User data — GAIA writes outside the repo, but guard against mistakes
+data/
+logs/
+sandbox/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+backups/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
