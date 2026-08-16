@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+import uuid
 from collections.abc import AsyncIterator, Sequence
 
 import httpx
@@ -18,6 +19,7 @@ from gaia.llm.base import (
     ProviderNotConfigured,
     ProviderUnavailable,
     StreamEvent,
+    ToolCallRequest,
     Usage,
 )
 
@@ -103,18 +105,31 @@ class OllamaProvider(LLMProvider):
         system: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
+        tools: list[dict[str, object]] | None = None,
     ) -> AsyncIterator[StreamEvent]:
-        wire_messages: list[dict[str, str]] = []
+        wire_messages: list[dict[str, object]] = []
         if system:
             wire_messages.append({"role": "system", "content": system})
-        wire_messages.extend(m.to_dict() for m in messages)
+        wire_messages.extend(_wire_message(m) for m in messages)
 
-        body = {
+        body: dict[str, object] = {
             "model": model,
             "messages": wire_messages,
             "stream": True,
             "options": {"temperature": temperature, "num_predict": max_tokens},
         }
+        if tools:
+            body["tools"] = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": t["name"],
+                        "description": t["description"],
+                        "parameters": t["parameters"],
+                    },
+                }
+                for t in tools
+            ]
 
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(600, connect=10)) as client:
@@ -158,6 +173,19 @@ async def _iter_ndjson(response: httpx.Response) -> AsyncIterator[StreamEvent]:
         message = chunk.get("message") or {}
         if message.get("content"):
             yield StreamEvent(type="text", text=message["content"])
+        # Ollama emits the full tool_calls list on one line rather than
+        # streaming it incrementally, so this is a straight read, not an
+        # accumulator like the OpenAI-compatible SSE path needs.
+        if message.get("tool_calls"):
+            calls = [
+                ToolCallRequest(
+                    id=uuid.uuid4().hex,
+                    name=(call.get("function") or {}).get("name", ""),
+                    arguments=(call.get("function") or {}).get("arguments") or {},
+                )
+                for call in message["tool_calls"]
+            ]
+            yield StreamEvent(type="tool_use", tool_calls=calls)
         if chunk.get("done"):
             stop_reason = chunk.get("done_reason") or "stop"
             usage = Usage(
@@ -167,3 +195,23 @@ async def _iter_ndjson(response: httpx.Response) -> AsyncIterator[StreamEvent]:
     if usage is not None:
         yield StreamEvent(type="usage", usage=usage)
     yield StreamEvent(type="done", stop_reason=stop_reason)
+
+
+def _wire_message(message: ChatMessage) -> dict[str, object]:
+    """Translate GAIA's neutral message shape into Ollama's wire format.
+
+    Ollama's tool-call arguments are a parsed object, not a JSON string (unlike
+    OpenAI's), so `ToolCallRequest.arguments` passes straight through.
+    """
+    if message.role == "assistant" and message.tool_calls:
+        return {
+            "role": "assistant",
+            "content": message.content or "",
+            "tool_calls": [
+                {"function": {"name": call.name, "arguments": call.arguments}}
+                for call in message.tool_calls
+            ],
+        }
+    if message.role == "tool":
+        return {"role": "tool", "content": message.content}
+    return message.to_dict()

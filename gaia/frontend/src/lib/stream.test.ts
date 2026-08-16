@@ -70,6 +70,61 @@ describe('streamChat', () => {
     expect(done).toBe(true)
   })
 
+  it('dispatches tool_call, tool_confirm_required and tool_result events', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockStream([
+        frame('tool_call', {
+          call_id: 't1',
+          tool: 'calculator',
+          arguments: { expression: '2+2' },
+          risk_level: 'safe',
+        }),
+        frame('tool_confirm_required', {
+          call_id: 't2',
+          tool: 'filesystem',
+          arguments: { path: '/tmp/x' },
+        }),
+        frame('tool_result', {
+          call_id: 't1',
+          tool: 'calculator',
+          ok: true,
+          content: '4',
+          display: { expression: '2+2', result: '4' },
+        }),
+      ]),
+    )
+
+    const calls: unknown[] = []
+    const confirms: unknown[] = []
+    const results: unknown[] = []
+
+    await streamChat(
+      { conversationId: 'c1', content: 'calc: 2+2' },
+      {
+        onToolCall: (data) => calls.push(data),
+        onToolConfirmRequired: (data) => confirms.push(data),
+        onToolResult: (data) => results.push(data),
+      },
+    )
+
+    expect(calls).toEqual([
+      { call_id: 't1', tool: 'calculator', arguments: { expression: '2+2' }, risk_level: 'safe' },
+    ])
+    expect(confirms).toEqual([
+      { call_id: 't2', tool: 'filesystem', arguments: { path: '/tmp/x' } },
+    ])
+    expect(results).toEqual([
+      {
+        call_id: 't1',
+        tool: 'calculator',
+        ok: true,
+        content: '4',
+        display: { expression: '2+2', result: '4' },
+      },
+    ])
+  })
+
   it('reassembles frames split across chunk boundaries', async () => {
     // A single SSE frame arriving in three arbitrary pieces, as a real socket
     // read can deliver it.

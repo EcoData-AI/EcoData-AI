@@ -2,12 +2,14 @@ import { useEffect, useRef } from 'react'
 import type { Message } from '@/lib/api'
 import type { DraftMessage } from '@/store/chat'
 import { Markdown } from './Markdown'
+import { ToolCallCard } from './ToolCallCard'
 
 interface Props {
   messages: Message[]
   draft: DraftMessage | null
   pendingUser: string | null
   sending: boolean
+  onResolveToolConfirmation?: (callId: string, approved: boolean) => void
 }
 
 function formatTokens(input: number | null, output: number | null): string | null {
@@ -29,7 +31,13 @@ function StatusChip({ status }: { status: Message['status'] }) {
   return <span className={`msg__status msg__status--${status}`}>{label}</span>
 }
 
-export function MessageList({ messages, draft, pendingUser, sending }: Props) {
+export function MessageList({
+  messages,
+  draft,
+  pendingUser,
+  sending,
+  onResolveToolConfirmation,
+}: Props) {
   const endRef = useRef<HTMLDivElement>(null)
   const scrollerRef = useRef<HTMLDivElement>(null)
   const pinnedToBottom = useRef(true)
@@ -62,6 +70,13 @@ export function MessageList({ messages, draft, pendingUser, sending }: Props) {
               <span>{message.role === 'user' ? 'You' : 'GAIA'}</span>
               <StatusChip status={message.status} />
             </header>
+            {message.role === 'assistant' && message.extra?.tool_calls?.length ? (
+              <div className="tool-calls">
+                {message.extra.tool_calls.map((call) => (
+                  <ToolCallCard key={call.call_id} call={call} />
+                ))}
+              </div>
+            ) : null}
             <div className="msg__body">
               {message.role === 'user' ? (
                 message.content
@@ -102,6 +117,13 @@ export function MessageList({ messages, draft, pendingUser, sending }: Props) {
               <span>GAIA</span>
               <span className="msg__status">thinking</span>
             </header>
+            {draft?.toolCalls?.length ? (
+              <div className="tool-calls">
+                {draft.toolCalls.map((call) => (
+                  <ToolCallCard key={call.call_id} call={call} onResolve={onResolveToolConfirmation} />
+                ))}
+              </div>
+            ) : null}
             <div className="msg__body">
               {draft?.content ? (
                 <>

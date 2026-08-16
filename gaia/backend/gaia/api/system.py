@@ -77,17 +77,25 @@ async def system_status(session: Session = Depends(get_session)) -> SystemStatus
         components.append(ComponentStatus(name="LLM", state="error", detail=str(exc)))
 
     # Everything else is reported as "not_built" rather than silently omitted,
-    # so the panel never implies a capability that does not exist yet.
+    # so the panel never implies a capability that does not exist yet — but a
+    # capability that *is* built (`available` flipped in core/capabilities.py)
+    # must report "ok" here too, or this panel would itself be the place an
+    # unbuilt feature looks unbuilt while the rest of the app knows better.
     for capability in CAPABILITIES:
         if capability.key in {"chat", "history", "providers", "settings", "backups"}:
             continue
-        components.append(
-            ComponentStatus(
-                name=capability.label,
-                state="not_built",
-                detail=f"Planned for Milestone {capability.milestone}",
+        if capability.available:
+            components.append(
+                ComponentStatus(name=capability.label, state="ok", detail=capability.detail)
             )
-        )
+        else:
+            components.append(
+                ComponentStatus(
+                    name=capability.label,
+                    state="not_built",
+                    detail=f"Planned for Milestone {capability.milestone}",
+                )
+            )
 
     return SystemStatus(
         version=__version__,

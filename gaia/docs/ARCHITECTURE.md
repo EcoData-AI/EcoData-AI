@@ -87,7 +87,13 @@ build context (budgeted against the model's context window)
       ↓
 create assistant row, status="streaming"
       ↓
-stream provider events → SSE deltas, accumulating text
+┌─▶ stream provider events → SSE deltas, accumulating text
+│         ↓
+│   tool(s) requested? ──no──▶ done
+│        │yes
+│        ▼
+│   gate + execute each call (see "Tool system"), append results
+└── loop (bounded — MAX_TOOL_ITERATIONS)
       ↓
 success → status="complete", record tokens/cost/latency
 failure → status="error" (nothing streamed) or "stopped" (partial text kept)
@@ -96,8 +102,14 @@ failure → status="error" (nothing streamed) or "stopped" (partial text kept)
 The assistant row exists **before** the first token. An interrupted turn therefore leaves a
 visible partial message with an honest status, rather than vanishing or appearing complete.
 
-Event names: `user_message`, `start`, `delta`, `error`, `done`. Errors arrive as an `error`
-event rather than an HTTP status, because by then the response has already begun.
+Event names: `user_message`, `start`, `delta`, `tool_call`, `tool_confirm_required`,
+`tool_result`, `error`, `done`. Errors arrive as an `error` event rather than an HTTP status,
+because by then the response has already begun.
+
+Only the **final** assistant text is ever persisted as a `Message` row — the tool round-trip
+within a turn (the model's tool-use request, the result fed back) lives in memory for the
+duration of that one request and in the `ToolCall` audit table, never as its own `Message`. This
+is what lets `context_builder` stay untouched: replayed history is exactly what it always was.
 
 ## Provider abstraction
 
@@ -125,6 +137,59 @@ models reject sampling parameters: the Claude 5-series and Opus 4.7/4.8 return H
 defaults to the newer-model behaviour, because omitting a parameter always works while sending a
 rejected one is a hard failure.
 
+## Tool system
+
+`gaia/tools/` mirrors `gaia/llm/` on purpose: a small ABC (`base.py`), a registry that is the
+single place that knows what exists (`registry.py`), and one module per tool. Calculator
+(`calculator.py`) is the only tool that ships in Milestone 2's first step.
+
+```python
+class Tool(abc.ABC):
+    name: str; description: str; parameters: dict  # JSON Schema
+    risk_level: RiskLevel                            # SAFE | CONFIRM | BLOCKED
+    async def execute(self, arguments: dict) -> ToolResult   # must never raise
+```
+
+**Risk level is a class attribute the tool itself declares — never something the model, the
+request, or a prompt can set.** The registry is the enforcement point:
+
+| Level | Advertised to the model? | Executes how |
+|---|---|---|
+| `SAFE` | yes | immediately, no pause |
+| `CONFIRM` | yes | pauses the stream for the user to approve or deny |
+| `BLOCKED` | **no** — filtered out of `tool_specs_for_provider()` | never |
+
+A `BLOCKED` tool stays fully defined in code but invisible at runtime, the same way an unbuilt
+capability cannot look built in one place and unbuilt in another (`core/capabilities.py`).
+
+**The tool-call loop** lives in `chat_service.stream_turn`: the provider is called, and if it
+requests a tool, GAIA executes it (or waits on a confirmation), appends the result, and calls the
+provider again — up to `MAX_TOOL_ITERATIONS` (6) times per turn. A model that never stops
+requesting tools does not hang the turn: it stops there, and the assistant message says so rather
+than pretending to have finished normally.
+
+**Confirmation** cannot pause and resume on the same SSE connection, so a `CONFIRM`-risk call
+uses a small side channel (`services/tool_confirmation.py`): an in-memory `{call_id:
+asyncio.Future}` map. The turn's generator `await`s its own future after yielding
+`tool_confirm_required`; `POST /api/chat/tool-confirmations/{call_id}` resolves it. Nothing here
+is persisted — a confirmation lost to a restart auto-denies after five minutes, consistent with
+chat turns already having no server-side cancellation (see "Known limits" below). Calculator is
+SAFE and never touches this path; it exists now so filesystem and terminal need no further
+plumbing here when they ship.
+
+**Provider translation.** `LLMProvider.stream_chat` takes an optional `tools` argument (a list of
+provider-neutral `{name, description, parameters}` specs) and can emit a
+`StreamEvent(type="tool_use", ...)`. Each provider translates this into its own wire format —
+Anthropic's `tool_use`/`tool_result` content blocks, Ollama's whole-object `tool_calls` (one
+NDJSON line), OpenAI's incrementally-streamed partial-JSON `tool_calls` (accumulated by index).
+Tool execution itself never happens inside a provider file — providers only describe what was
+requested; `chat_service` decides whether and how it runs.
+
+**Audit trail.** Every call becomes one `ToolCall` row — arguments, risk level, approval
+(`auto`/`approved`/`denied`), status, timing, and a truncated result summary — written regardless
+of outcome. The table already existed in the initial schema (see "Database" below); this
+milestone is what starts writing to it.
+
 ## Context builder
 
 `core/context_builder.py` decides what is actually sent. It assembles the persona, the user's
@@ -142,11 +207,11 @@ counting and report it back in `usage`.
 The full schema from the brief exists up front so migrations stay linear as milestones land.
 **Only a subset is wired to anything.**
 
-| Live in v0.1 | Schema only (no API surface) |
+| Live | Schema only (no API surface) |
 |---|---|
 | `conversations`, `messages` | `projects`, `project_tasks`, `memories` |
 | `settings`, `task_runs` | `documents`, `document_chunks` |
-| `tool_calls` (audit, written from M2) | `experiments`, `simulation_runs` |
+| `tool_calls` (audit — live from Milestone 2) | `experiments`, `simulation_runs` |
 | | `study_plans`, `learning_progress` |
 | | `permissions`, `workspace_roots` |
 

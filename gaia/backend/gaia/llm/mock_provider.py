@@ -18,10 +18,22 @@ from gaia.llm.base import (
     ModelInfo,
     ProviderHealth,
     StreamEvent,
+    ToolCallRequest,
     Usage,
 )
 
 MOCK_MODEL_ID = "mock-echo"
+
+#: A user message starting with this (case-insensitive) makes the mock provider
+#: request the calculator tool with the rest of the text as the expression,
+#: instead of echoing — this is what lets the tool-call loop be exercised
+#: end-to-end in tests with no real provider or credentials.
+CALC_TRIGGER = "calc:"
+
+#: A user message starting with this always re-requests a tool call, even after
+#: a tool result comes back — used to test the loop's iteration cap against a
+#: model that never stops calling tools.
+TOOLLOOP_TRIGGER = "toolloop:"
 
 
 class MockProvider(LLMProvider):
@@ -55,11 +67,59 @@ class MockProvider(LLMProvider):
         system: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
+        tools: list[dict[str, object]] | None = None,
     ) -> AsyncIterator[StreamEvent]:
-        last_user = next(
-            (m.content for m in reversed(list(messages)) if m.role == "user"),
-            "",
+        messages = list(messages)
+        tool_result = next((m for m in reversed(messages) if m.role == "tool"), None)
+        last_user = next((m.content for m in reversed(messages) if m.role == "user"), "")
+
+        # A model that never stops calling tools — exercises the iteration cap.
+        has_toolloop_trigger = any(
+            m.role == "user" and m.content.strip().lower().startswith(TOOLLOOP_TRIGGER)
+            for m in messages
         )
+        if tools and has_toolloop_trigger:
+            call_id = f"mock-loop-{sum(1 for m in messages if m.role == 'tool') + 1}"
+            yield StreamEvent(
+                type="tool_use",
+                tool_calls=[
+                    ToolCallRequest(id=call_id, name="calculator", arguments={"expression": "1+1"})
+                ],
+            )
+            yield StreamEvent(type="usage", usage=Usage(input_tokens=1, output_tokens=0))
+            yield StreamEvent(type="done", stop_reason="tool_use")
+            return
+
+        # A tool result is present: acknowledge it instead of echoing again —
+        # this is the loop's second (and later) provider call within one turn.
+        if tool_result is not None:
+            reply = f"[mock provider] tool result: {tool_result.content}"
+            for word in reply.split(" "):
+                await asyncio.sleep(0)
+                yield StreamEvent(type="text", text=word + " ")
+            yield StreamEvent(
+                type="usage",
+                usage=Usage(input_tokens=len(last_user.split()), output_tokens=len(reply.split())),
+            )
+            yield StreamEvent(type="done", stop_reason="end_turn")
+            return
+
+        if tools and last_user.strip().lower().startswith(CALC_TRIGGER):
+            expression = last_user.split(":", 1)[1].strip()
+            yield StreamEvent(
+                type="tool_use",
+                tool_calls=[
+                    ToolCallRequest(
+                        id="mock-call-1", name="calculator", arguments={"expression": expression}
+                    )
+                ],
+            )
+            yield StreamEvent(
+                type="usage", usage=Usage(input_tokens=len(last_user.split()), output_tokens=0)
+            )
+            yield StreamEvent(type="done", stop_reason="tool_use")
+            return
+
         reply = f"[mock provider] You said: {last_user}"
         for word in reply.split(" "):
             await asyncio.sleep(0)  # yield to the event loop, like a real stream

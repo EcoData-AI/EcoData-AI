@@ -25,6 +25,7 @@ from gaia.llm.base import (
     ProviderRateLimited,
     ProviderUnavailable,
     StreamEvent,
+    ToolCallRequest,
     Usage,
 )
 
@@ -107,6 +108,7 @@ class OpenAICompatibleProvider(LLMProvider):
         system: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
+        tools: list[dict[str, object]] | None = None,
     ) -> AsyncIterator[StreamEvent]:
         if not self.is_configured():
             raise ProviderNotConfigured(
@@ -114,12 +116,12 @@ class OpenAICompatibleProvider(LLMProvider):
                 remedy="Add an API key and base URL in Settings → Models.",
             )
 
-        wire_messages: list[dict[str, str]] = []
+        wire_messages: list[dict[str, object]] = []
         if system:
             wire_messages.append({"role": "system", "content": system})
-        wire_messages.extend(m.to_dict() for m in messages)
+        wire_messages.extend(_wire_message(m) for m in messages)
 
-        body = {
+        body: dict[str, object] = {
             "model": model,
             "messages": wire_messages,
             "stream": True,
@@ -127,6 +129,18 @@ class OpenAICompatibleProvider(LLMProvider):
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
+        if tools:
+            body["tools"] = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": t["name"],
+                        "description": t["description"],
+                        "parameters": t["parameters"],
+                    },
+                }
+                for t in tools
+            ]
 
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(600, connect=15)) as client:
@@ -151,6 +165,10 @@ class OpenAICompatibleProvider(LLMProvider):
 async def _iter_sse(response: httpx.Response) -> AsyncIterator[StreamEvent]:
     usage: Usage | None = None
     stop_reason: str | None = None
+    # Unlike Ollama, tool-call arguments arrive as partial JSON *string*
+    # fragments spread across many chunks, keyed by the tool call's `index` —
+    # they have to be accumulated and parsed only once the stream ends.
+    tool_calls_acc: dict[int, dict[str, str | None]] = {}
     async for line in response.aiter_lines():
         if not line.startswith("data:"):
             continue
@@ -168,6 +186,16 @@ async def _iter_sse(response: httpx.Response) -> AsyncIterator[StreamEvent]:
             text = delta.get("content")
             if text:
                 yield StreamEvent(type="text", text=text)
+            for call in delta.get("tool_calls") or []:
+                index = call.get("index", 0)
+                entry = tool_calls_acc.setdefault(index, {"id": None, "name": None, "args": ""})
+                if call.get("id"):
+                    entry["id"] = call["id"]
+                function = call.get("function") or {}
+                if function.get("name"):
+                    entry["name"] = function["name"]
+                if function.get("arguments"):
+                    entry["args"] = (entry["args"] or "") + function["arguments"]
             if choice.get("finish_reason"):
                 stop_reason = choice["finish_reason"]
         if chunk.get("usage"):
@@ -175,9 +203,50 @@ async def _iter_sse(response: httpx.Response) -> AsyncIterator[StreamEvent]:
                 input_tokens=chunk["usage"].get("prompt_tokens"),
                 output_tokens=chunk["usage"].get("completion_tokens"),
             )
+    if tool_calls_acc:
+        calls = []
+        for index in sorted(tool_calls_acc):
+            entry = tool_calls_acc[index]
+            raw_args = entry["args"] or ""
+            try:
+                arguments = json.loads(raw_args) if raw_args.strip() else {}
+            except json.JSONDecodeError:
+                arguments = {}
+            calls.append(
+                ToolCallRequest(
+                    id=entry["id"] or f"call_{index}",
+                    name=entry["name"] or "",
+                    arguments=arguments,
+                )
+            )
+        yield StreamEvent(type="tool_use", tool_calls=calls)
     if usage is not None:
         yield StreamEvent(type="usage", usage=usage)
     yield StreamEvent(type="done", stop_reason=stop_reason)
+
+
+def _wire_message(message: ChatMessage) -> dict[str, object]:
+    """Translate GAIA's neutral message shape into OpenAI's wire format.
+
+    OpenAI wants tool-call arguments serialised back to a JSON *string*
+    (the mirror image of how `_iter_sse` parses them out of the response).
+    """
+    if message.role == "assistant" and message.tool_calls:
+        return {
+            "role": "assistant",
+            "content": message.content or None,
+            "tool_calls": [
+                {
+                    "id": call.id,
+                    "type": "function",
+                    "function": {"name": call.name, "arguments": json.dumps(call.arguments)},
+                }
+                for call in message.tool_calls
+            ],
+        }
+    if message.role == "tool":
+        return {"role": "tool", "tool_call_id": message.tool_call_id, "content": message.content}
+    return message.to_dict()
 
 
 def _http_error(status: int, body: str) -> Exception:

@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Literal
 
-Role = Literal["system", "user", "assistant"]
+Role = Literal["system", "user", "assistant", "tool"]
 
 
 class ProviderError(Exception):
@@ -61,9 +61,28 @@ class ProviderRateLimited(ProviderError):
 
 
 @dataclass(slots=True)
+class ToolCallRequest:
+    """One tool invocation the model asked for.
+
+    `id` is the provider's own identifier for the call (Anthropic and OpenAI
+    issue one; Ollama does not, so `OllamaProvider` synthesises one) — it must
+    round-trip back to the provider unchanged in the follow-up tool-result
+    message so the vendor can match the answer to the question.
+    """
+
+    id: str
+    name: str
+    arguments: dict[str, Any]
+
+
+@dataclass(slots=True)
 class ChatMessage:
     role: Role
     content: str
+    # Set on an assistant message that requested one or more tool calls.
+    tool_calls: list[ToolCallRequest] | None = None
+    # Set on a role="tool" message: which call this is the result of.
+    tool_call_id: str | None = None
 
     def to_dict(self) -> dict[str, str]:
         return {"role": self.role, "content": self.content}
@@ -131,15 +150,17 @@ class StreamEvent:
     """One item from a streaming completion.
 
     type:
-      "text"   -> `text` holds the delta to append
-      "usage"  -> `usage` holds token counts reported by the provider
-      "done"   -> stream finished normally; `stop_reason` may be set
-      "error"  -> `error` holds a serialisable ProviderError payload
+      "text"     -> `text` holds the delta to append
+      "usage"    -> `usage` holds token counts reported by the provider
+      "tool_use" -> `tool_calls` holds one or more requested calls
+      "done"     -> stream finished normally; `stop_reason` may be set
+      "error"    -> `error` holds a serialisable ProviderError payload
     """
 
-    type: Literal["text", "usage", "done", "error"]
+    type: Literal["text", "usage", "tool_use", "done", "error"]
     text: str = ""
     usage: Usage | None = None
+    tool_calls: list[ToolCallRequest] | None = None
     stop_reason: str | None = None
     error: dict[str, Any] | None = None
 
@@ -196,12 +217,21 @@ class LLMProvider(abc.ABC):
         system: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
+        tools: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[StreamEvent]:
         """Stream a completion.
 
         Implementations yield `StreamEvent`s and must translate transport and
         vendor errors into `ProviderError` subclasses rather than leaking
         httpx/JSON exceptions upward.
+
+        `tools` is a list of provider-neutral specs — `{"name", "description",
+        "parameters"}` where `parameters` is a JSON Schema object, as built by
+        `gaia.tools.registry.tool_specs_for_provider()`. A provider that is
+        asked to call a tool must translate the request into its own wire
+        format and, on completion, emit a `StreamEvent(type="tool_use", ...)`
+        rather than trying to interpret the call itself — tool execution
+        happens above this layer, in `chat_service`.
         """
 
     # -- helpers -----------------------------------------------------------

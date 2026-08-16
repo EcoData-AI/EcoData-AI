@@ -22,6 +22,9 @@ class MessageOut(BaseModel):
     output_tokens: int | None = None
     cost_usd: float | None = None
     latency_ms: int | None = None
+    # Currently holds {"tool_calls": [...]} when this turn called a tool — see
+    # `gaia.services.chat_service`. `None` when nothing was recorded.
+    extra: dict[str, Any] | None = None
     created_at: datetime
 
 
@@ -65,6 +68,10 @@ class ChatRequest(BaseModel):
     content: str = Field(min_length=1, max_length=200_000)
     provider_id: str | None = None
     model_id: str | None = None
+
+
+class ToolConfirmationResolve(BaseModel):
+    approved: bool
 
 
 class ProviderOut(BaseModel):

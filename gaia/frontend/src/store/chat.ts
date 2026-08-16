@@ -7,6 +7,21 @@ import {
 } from '@/lib/api'
 import { streamChat, type StreamErrorPayload } from '@/lib/stream'
 
+/** A tool call as rendered live, while its turn is still streaming. Once the
+ * turn completes it is superseded by the persisted `ToolCallLogEntry` in
+ * `message.extra.tool_calls`, which `ToolCallCard` renders with the same
+ * shape. */
+export interface DraftToolCall {
+  call_id: string
+  tool: string
+  arguments: Record<string, unknown>
+  status: 'running' | 'awaiting_confirmation' | 'done'
+  ok?: boolean
+  content?: string
+  display?: Record<string, unknown> | null
+  error?: string | null
+}
+
 /** A message that exists only in the UI while its turn is in flight. */
 export interface DraftMessage {
   id: string
@@ -14,6 +29,7 @@ export interface DraftMessage {
   content: string
   status: 'streaming' | 'error'
   error?: StreamErrorPayload
+  toolCalls?: DraftToolCall[]
 }
 
 interface ChatState {
@@ -47,6 +63,7 @@ interface ChatState {
   send: (content: string) => Promise<void>
   stop: () => void
   dismissTurnError: () => void
+  resolveToolConfirmation: (callId: string, approved: boolean) => Promise<void>
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -201,6 +218,48 @@ export const useChatStore = create<ChatState>((set, get) => ({
               state.draft ? { draft: { ...state.draft, content: state.draft.content + text } } : {},
             )
           },
+          onToolCall: ({ call_id, tool, arguments: args, risk_level }) => {
+            set((state) => {
+              if (!state.draft) return {}
+              const entry: DraftToolCall = {
+                call_id,
+                tool,
+                arguments: args,
+                status: risk_level === 'confirm' ? 'awaiting_confirmation' : 'running',
+              }
+              return {
+                draft: { ...state.draft, toolCalls: [...(state.draft.toolCalls ?? []), entry] },
+              }
+            })
+          },
+          onToolConfirmRequired: ({ call_id }) => {
+            set((state) => {
+              if (!state.draft?.toolCalls) return {}
+              return {
+                draft: {
+                  ...state.draft,
+                  toolCalls: state.draft.toolCalls.map((tc) =>
+                    tc.call_id === call_id ? { ...tc, status: 'awaiting_confirmation' } : tc,
+                  ),
+                },
+              }
+            })
+          },
+          onToolResult: ({ call_id, ok, content, display, error }) => {
+            set((state) => {
+              if (!state.draft?.toolCalls) return {}
+              return {
+                draft: {
+                  ...state.draft,
+                  toolCalls: state.draft.toolCalls.map((tc) =>
+                    tc.call_id === call_id
+                      ? { ...tc, status: 'done', ok, content, display, error }
+                      : tc,
+                  ),
+                },
+              }
+            })
+          },
           onError: (error) => {
             set({ turnError: error })
           },
@@ -250,5 +309,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   dismissTurnError() {
     set({ turnError: null })
+  },
+
+  async resolveToolConfirmation(callId, approved) {
+    // Optimistic: mark it resolved locally so the buttons disappear right
+    // away. The SSE `tool_result` event (or a turn `error`, if the backend
+    // considers it already timed out) is the actual source of truth.
+    set((state) => {
+      if (!state.draft?.toolCalls) return {}
+      return {
+        draft: {
+          ...state.draft,
+          toolCalls: state.draft.toolCalls.map((tc) =>
+            tc.call_id === callId
+              ? { ...tc, status: approved ? 'running' : 'done', ok: approved ? tc.ok : false }
+              : tc,
+          ),
+        },
+      }
+    })
+    try {
+      await api.resolveToolConfirmation(callId, approved)
+    } catch {
+      /* the stream's own error handling reflects the actual outcome */
+    }
   },
 }))

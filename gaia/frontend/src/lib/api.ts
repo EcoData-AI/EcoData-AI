@@ -16,6 +16,18 @@ export function apiBase(): string {
   return window.__GAIA_API_BASE__ ?? ''
 }
 
+/** A tool call as recorded on a persisted message — see `ToolCallView` in the
+ * chat store for the equivalent shape while a turn is still streaming. */
+export interface ToolCallLogEntry {
+  call_id: string
+  tool: string
+  ok: boolean
+  content: string
+  display?: Record<string, unknown> | null
+  error?: string | null
+  arguments: Record<string, unknown>
+}
+
 export interface Message {
   id: string
   conversation_id: string
@@ -30,6 +42,7 @@ export interface Message {
   output_tokens: number | null
   cost_usd: number | null
   latency_ms: number | null
+  extra: { tool_calls?: ToolCallLogEntry[] } | null
   created_at: string
 }
 
@@ -215,6 +228,12 @@ export const api = {
   systemStatus: () => request<SystemStatus>('/api/system/status'),
 
   privacy: () => request<PrivacyRow[]>('/api/privacy'),
+
+  resolveToolConfirmation: (callId: string, approved: boolean) =>
+    request<void>(`/api/chat/tool-confirmations/${callId}`, {
+      method: 'POST',
+      body: JSON.stringify({ approved }),
+    }),
 
   exportBackupUrl: () => `${apiBase()}/api/backup/export`,
 

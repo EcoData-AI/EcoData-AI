@@ -452,6 +452,44 @@ select {
   border-color: var(--warn);
 }
 
+.tool-calls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.tool-call {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  background: var(--bg-raised);
+}
+
+.tool-call__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.tool-call__name {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tool-call__body {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.tool-call__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .cursor {
   display: inline-block;
   width: 7px;

@@ -25,7 +25,7 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability("providers", "Model providers", True, 1, "Anthropic, OpenAI-compatible, Ollama."),
     Capability("settings", "Settings & privacy", True, 1, "Provider, model and data controls."),
     Capability("backups", "Backup & restore", True, 1, "Export and import the local database."),
-    Capability("tools", "Tool system", False, 2, "Calculator, Python, filesystem, terminal."),
+    Capability("tools", "Tool system", True, 2, "Calculator, Python, filesystem, terminal."),
     Capability("python", "Python sandbox", False, 2, "Sandboxed execution with NumPy/SciPy/SymPy."),
     Capability("filesystem", "Filesystem access", False, 2, "Workspace-scoped read and write."),
     Capability("terminal", "Terminal", False, 2, "Audited command execution with approvals."),

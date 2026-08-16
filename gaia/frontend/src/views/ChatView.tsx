@@ -24,6 +24,7 @@ export function ChatView({ providerReady, providerHint, onOpenSettings }: Props)
     stop,
     dismissTurnError,
     newConversation,
+    resolveToolConfirmation,
   } = useChatStore()
 
   const active = conversations.find((c) => c.id === activeId)
@@ -85,6 +86,9 @@ export function ChatView({ providerReady, providerHint, onOpenSettings }: Props)
           draft={draft}
           pendingUser={pendingUser}
           sending={sending}
+          onResolveToolConfirmation={(callId, approved) =>
+            void resolveToolConfirmation(callId, approved)
+          }
         />
       )}
 

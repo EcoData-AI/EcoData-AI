@@ -19,6 +19,7 @@ from gaia.llm.base import (
     ProviderRateLimited,
     ProviderUnavailable,
     StreamEvent,
+    ToolCallRequest,
     Usage,
 )
 from gaia.llm.catalog import ANTHROPIC_MODELS, DEFAULT_ANTHROPIC_MODEL, anthropic_capabilities
@@ -79,6 +80,7 @@ class AnthropicProvider(LLMProvider):
         system: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
+        tools: list[dict[str, object]] | None = None,
     ) -> AsyncIterator[StreamEvent]:
         client = self._get_client()
         caps = anthropic_capabilities(model)
@@ -86,8 +88,7 @@ class AnthropicProvider(LLMProvider):
         payload: dict[str, object] = {
             "model": model,
             "max_tokens": max_tokens,
-            # The Anthropic API takes system separately rather than as a message.
-            "messages": [m.to_dict() for m in messages if m.role != "system"],
+            "messages": _wire_messages(messages),
         }
         if system:
             payload["system"] = system
@@ -97,6 +98,15 @@ class AnthropicProvider(LLMProvider):
             payload["temperature"] = temperature
         if caps["supports_effort"] and self.config.options.get("effort"):
             payload["output_config"] = {"effort": self.config.options["effort"]}
+        if tools:
+            payload["tools"] = [
+                {
+                    "name": t["name"],
+                    "description": t["description"],
+                    "input_schema": t["parameters"],
+                }
+                for t in tools
+            ]
 
         try:
             async with client.messages.stream(**payload) as stream:  # type: ignore[arg-type]
@@ -141,6 +151,15 @@ class AnthropicProvider(LLMProvider):
             )
             return
 
+        if final.stop_reason == "tool_use":
+            calls = [
+                ToolCallRequest(id=block.id, name=block.name, arguments=block.input)
+                for block in final.content
+                if block.type == "tool_use"
+            ]
+            if calls:
+                yield StreamEvent(type="tool_use", tool_calls=calls)
+
         yield StreamEvent(
             type="usage",
             usage=Usage(
@@ -152,3 +171,42 @@ class AnthropicProvider(LLMProvider):
 
     async def resolve_model(self, requested: str | None) -> str:
         return requested or self.config.default_model or DEFAULT_ANTHROPIC_MODEL
+
+
+def _wire_messages(messages: Sequence[ChatMessage]) -> list[dict[str, object]]:
+    """Translate GAIA's neutral message shape into Anthropic content blocks.
+
+    An assistant message that called tools becomes a `tool_use` content block;
+    the tool's result comes back as a `user` message carrying a `tool_result`
+    block — Anthropic has no separate "tool" role. Plain messages pass through
+    unchanged via `ChatMessage.to_dict()`.
+    """
+    wire: list[dict[str, object]] = []
+    for message in messages:
+        if message.role == "system":
+            continue
+        if message.role == "assistant" and message.tool_calls:
+            blocks: list[dict[str, object]] = []
+            if message.content:
+                blocks.append({"type": "text", "text": message.content})
+            blocks.extend(
+                {"type": "tool_use", "id": call.id, "name": call.name, "input": call.arguments}
+                for call in message.tool_calls
+            )
+            wire.append({"role": "assistant", "content": blocks})
+        elif message.role == "tool":
+            wire.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": message.tool_call_id,
+                            "content": message.content,
+                        }
+                    ],
+                }
+            )
+        else:
+            wire.append(message.to_dict())
+    return wire

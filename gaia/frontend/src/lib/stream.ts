@@ -16,6 +16,28 @@ export interface StreamErrorPayload {
   status?: number | null
 }
 
+export interface ToolCallEventPayload {
+  call_id: string
+  tool: string
+  arguments: Record<string, unknown>
+  risk_level: 'safe' | 'confirm' | 'blocked'
+}
+
+export interface ToolResultEventPayload {
+  call_id: string
+  tool: string
+  ok: boolean
+  content: string
+  display?: Record<string, unknown> | null
+  error?: string | null
+}
+
+export interface ToolConfirmRequiredPayload {
+  call_id: string
+  tool: string
+  arguments: Record<string, unknown>
+}
+
 export interface ChatStreamHandlers {
   onUserMessage?: (data: { id: string; sequence: number; title: string }) => void
   onStart?: (data: {
@@ -30,6 +52,9 @@ export interface ChatStreamHandlers {
     }
   }) => void
   onDelta?: (text: string) => void
+  onToolCall?: (data: ToolCallEventPayload) => void
+  onToolConfirmRequired?: (data: ToolConfirmRequiredPayload) => void
+  onToolResult?: (data: ToolResultEventPayload) => void
   onError?: (error: StreamErrorPayload) => void
   onDone?: (data: {
     message_id: string
@@ -136,6 +161,15 @@ function dispatch(frame: string, handlers: ChatStreamHandlers): void {
       break
     case 'delta':
       handlers.onDelta?.((data as { text: string }).text)
+      break
+    case 'tool_call':
+      handlers.onToolCall?.(data as never)
+      break
+    case 'tool_confirm_required':
+      handlers.onToolConfirmRequired?.(data as never)
+      break
+    case 'tool_result':
+      handlers.onToolResult?.(data as never)
       break
     case 'error':
       handlers.onError?.(data as StreamErrorPayload)
