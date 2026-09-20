@@ -86,6 +86,13 @@ def test_privacy_dashboard_marks_cloud_inference(client):
     assert rows["LLM inference"]["location"] == "LOCAL"
 
 
+def test_privacy_dashboard_reports_python_execution_as_shipped(client):
+    # Milestone 2 shipped the sandbox; the dashboard must not still call it
+    # NOT BUILT — that is exactly the drift docs/PRIVACY.md warns against.
+    rows = {row["label"]: row for row in client.get("/api/privacy").json()}
+    assert rows["Python execution"]["location"] == "LOCAL"
+
+
 def test_backup_export_produces_a_sqlite_file(mock_client):
     conversation_id = mock_client.post("/api/conversations", json={"title": "keep me"}).json()["id"]
     assert conversation_id

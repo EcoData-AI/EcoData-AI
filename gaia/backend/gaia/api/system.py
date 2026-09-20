@@ -149,8 +149,8 @@ def privacy(session: Session = Depends(get_session)) -> list[PrivacyRow]:
         ),
         PrivacyRow(
             label="Python execution",
-            location="NOT BUILT",
-            detail="Planned for Milestone 2. Will run in a local sandbox.",
+            location="LOCAL",
+            detail="Isolated subprocess, requires your approval every time.",
         ),
         PrivacyRow(
             label="Web search",
