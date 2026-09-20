@@ -104,6 +104,13 @@ def test_privacy_dashboard_lists_voice(client):
     assert rows["Voice"]["location"] == "LOCAL"
 
 
+def test_privacy_dashboard_lists_logs_and_backups(client):
+    # docs/PRIVACY.md documents both rows; the API had never actually listed them.
+    rows = {row["label"]: row for row in client.get("/api/privacy").json()}
+    assert rows["Logs"]["location"] == "LOCAL"
+    assert rows["Backups"]["location"] == "LOCAL"
+
+
 def test_backup_export_produces_a_sqlite_file(mock_client):
     conversation_id = mock_client.post("/api/conversations", json={"title": "keep me"}).json()["id"]
     assert conversation_id

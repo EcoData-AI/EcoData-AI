@@ -128,6 +128,16 @@ def privacy(session: Session = Depends(get_session)) -> list[PrivacyRow]:
             detail="OS keyring, or an owner-only file. Never in the database or in git.",
         ),
         PrivacyRow(
+            label="Logs",
+            location="LOCAL",
+            detail="Rotated JSON in your data directory. Message content is never logged.",
+        ),
+        PrivacyRow(
+            label="Backups",
+            location="LOCAL",
+            detail="Written only when you export one, to a path you choose.",
+        ),
+        PrivacyRow(
             label="LLM inference",
             location="LOCAL" if llm_local else "CLOUD",
             detail=(
