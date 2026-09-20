@@ -99,6 +99,11 @@ def test_privacy_dashboard_lists_filesystem_and_terminal(client):
     assert rows["Terminal commands"]["location"] == "LOCAL"
 
 
+def test_privacy_dashboard_lists_voice(client):
+    rows = {row["label"]: row for row in client.get("/api/privacy").json()}
+    assert rows["Voice"]["location"] == "LOCAL"
+
+
 def test_backup_export_produces_a_sqlite_file(mock_client):
     conversation_id = mock_client.post("/api/conversations", json={"title": "keep me"}).json()["id"]
     assert conversation_id

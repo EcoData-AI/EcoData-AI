@@ -163,6 +163,14 @@ def privacy(session: Session = Depends(get_session)) -> list[PrivacyRow]:
             detail="Requires your approval every time; runs in a directory you allowed.",
         ),
         PrivacyRow(
+            label="Voice",
+            location="LOCAL",
+            detail=(
+                "Microphone audio and synthesized speech (faster-whisper, pyttsx3) — "
+                "nothing is sent anywhere, nothing is kept past the request."
+            ),
+        ),
+        PrivacyRow(
             label="Web search",
             location="NOT BUILT",
             detail="Planned for Milestone 6. Will be external and clearly marked.",
