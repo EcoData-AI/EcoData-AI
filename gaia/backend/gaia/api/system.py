@@ -150,12 +150,12 @@ def privacy(session: Session = Depends(get_session)) -> list[PrivacyRow]:
             ),
         ),
         PrivacyRow(
-            label="Memory", location="NOT BUILT", detail="Planned for Milestone 3. Will be local."
+            label="Memory", location="NOT BUILT", detail="Planned for Milestone 4. Will be local."
         ),
         PrivacyRow(
             label="Documents",
             location="NOT BUILT",
-            detail="Planned for Milestone 4. Will be local.",
+            detail="Planned for Milestone 5. Will be local.",
         ),
         PrivacyRow(
             label="Python execution",
@@ -183,7 +183,7 @@ def privacy(session: Session = Depends(get_session)) -> list[PrivacyRow]:
         PrivacyRow(
             label="Web search",
             location="NOT BUILT",
-            detail="Planned for Milestone 6. Will be external and clearly marked.",
+            detail="Planned for Milestone 7. Will be external and clearly marked.",
         ),
         PrivacyRow(
             label="Telemetry",

@@ -19,7 +19,7 @@ from the running configuration rather than written by hand.
 | Terminal commands | **LOCAL** | Requires your approval every time; a directory you allowed |
 | Voice (microphone, synthesized speech) | **LOCAL** | See "Voice" below — nothing is sent anywhere, nothing is kept |
 | Telemetry / analytics | **none** | GAIA collects nothing and phones home to nobody |
-| Memory, documents, web search | **not built** | Milestones 3–6 |
+| Memory, documents, web search | **not built** | Milestones 4, 5, 7 respectively |
 
 ## What leaves your machine
 

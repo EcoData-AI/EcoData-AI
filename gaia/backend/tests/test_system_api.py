@@ -111,6 +111,15 @@ def test_privacy_dashboard_lists_logs_and_backups(client):
     assert rows["Backups"]["location"] == "LOCAL"
 
 
+def test_privacy_dashboard_not_built_rows_cite_current_milestones(client):
+    # These drifted out of sync with core/capabilities.py's renumbering once
+    # before (Python execution) — pin the milestone numbers so it can't again.
+    rows = {row["label"]: row for row in client.get("/api/privacy").json()}
+    assert "Milestone 4" in rows["Memory"]["detail"]
+    assert "Milestone 5" in rows["Documents"]["detail"]
+    assert "Milestone 7" in rows["Web search"]["detail"]
+
+
 def test_backup_export_produces_a_sqlite_file(mock_client):
     conversation_id = mock_client.post("/api/conversations", json={"title": "keep me"}).json()["id"]
     assert conversation_id
