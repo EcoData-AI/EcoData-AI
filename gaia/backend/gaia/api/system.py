@@ -153,6 +153,16 @@ def privacy(session: Session = Depends(get_session)) -> list[PrivacyRow]:
             detail="Isolated subprocess, requires your approval every time.",
         ),
         PrivacyRow(
+            label="Filesystem access",
+            location="LOCAL",
+            detail="Only inside directories you explicitly allow.",
+        ),
+        PrivacyRow(
+            label="Terminal commands",
+            location="LOCAL",
+            detail="Requires your approval every time; runs in a directory you allowed.",
+        ),
+        PrivacyRow(
             label="Web search",
             location="NOT BUILT",
             detail="Planned for Milestone 6. Will be external and clearly marked.",
