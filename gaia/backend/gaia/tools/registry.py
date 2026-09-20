@@ -10,9 +10,16 @@ from __future__ import annotations
 
 from gaia.tools.base import RiskLevel, Tool
 from gaia.tools.calculator import CalculatorTool
+from gaia.tools.filesystem import FilesystemReadTool, FilesystemWriteTool
+from gaia.tools.python_sandbox import PythonSandboxTool
+from gaia.tools.terminal import TerminalTool
 
 TOOL_CLASSES: dict[str, type[Tool]] = {
     CalculatorTool.name: CalculatorTool,
+    PythonSandboxTool.name: PythonSandboxTool,
+    FilesystemReadTool.name: FilesystemReadTool,
+    FilesystemWriteTool.name: FilesystemWriteTool,
+    TerminalTool.name: TerminalTool,
 }
 
 

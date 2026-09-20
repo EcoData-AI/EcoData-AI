@@ -74,8 +74,9 @@ export function ChatView({ providerReady, providerHint, onOpenSettings }: Props)
                 not in the cloud.
               </p>
               <p style={{ color: 'var(--text-faint)', fontSize: 13 }}>
-                This is Milestone 1: chat, history and model providers. Tools, memory, documents
-                and voice are not built yet and GAIA will say so rather than pretend.
+                Chat, tools (calculator, Python, filesystem, terminal) and voice are live.
+                Memory, documents and the rest of the roadmap aren't built yet, and GAIA will say
+                so rather than pretend.
               </p>
             </div>
           </div>

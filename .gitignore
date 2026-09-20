@@ -12,6 +12,7 @@ venv/
 node_modules/
 dist/
 dist-ssr/
+.vite/
 *.local
 
 # Rust / Tauri

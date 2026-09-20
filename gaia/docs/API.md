@@ -32,7 +32,7 @@ Streams one assistant turn as Server-Sent Events.
 | `start` | `{message_id, sequence, provider_id, model_id, context:{sources, estimated_input_tokens, dropped_messages}}` | The provider accepted the request. |
 | `delta` | `{text}` | Append to the assistant message. Emitted many times. |
 | `tool_call` | `{call_id, tool, arguments, risk_level}` | A tool call was accepted for execution (`risk_level: "safe"`) or is about to be gated (`"confirm"`). |
-| `tool_confirm_required` | `{call_id, tool, arguments}` | A `CONFIRM`-risk call is waiting on `POST /api/chat/tool-confirmations/{call_id}`. Not emitted for any tool shipped today — Calculator is `SAFE`. |
+| `tool_confirm_required` | `{call_id, tool, arguments}` | A `CONFIRM`-risk call (`python_sandbox`) is waiting on `POST /api/chat/tool-confirmations/{call_id}`. |
 | `tool_result` | `{call_id, tool, ok, content, display, error}` | A tool call finished. `ok: false` is reported here, not as a turn `error` — the model sees it and can react. |
 | `error` | `{kind, message, remedy, status}` | The turn failed. Terminal. |
 | `done` | `{message_id, stop_reason, latency_ms, input_tokens, output_tokens, cost_usd}` | The turn completed. Terminal. |
@@ -69,7 +69,7 @@ Resolves a pending `CONFIRM`-risk tool call raised mid-turn by a `tool_confirm_r
 
 `204` on success. `404` if there was nothing pending for that id — already resolved, or the
 5-minute wait timed out (an unanswered confirmation auto-denies rather than hanging the turn
-forever). No tool shipped today calls this path; it exists for `CONFIRM`-risk tools to come.
+forever). `python_sandbox` is the only tool that uses this path today.
 
 ---
 
@@ -137,6 +137,69 @@ Secrets are **not** settings and are never returned here.
 
 ---
 
+## Workspace
+
+Registers the directories `filesystem_read`, `filesystem_write`, and `terminal` (see
+`docs/ARCHITECTURE.md`, "Tool system") are allowed to touch. This is a settings action, not a
+tool call — no `ToolCall` audit row, no risk gate. No Settings UI exists for this yet; use these
+endpoints directly.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/workspace/roots` | List every registered root |
+| `POST` | `/api/workspace/roots` | `{path, writable?}` → `201`. `path` must be absolute, must already exist, must be a directory, and must not itself be a filesystem root (`C:\`, `/`) |
+| `DELETE` | `/api/workspace/roots/{id}` | `204`; `404` if unknown |
+
+```json
+{ "path": "C:\\Users\\you\\Documents\\gaia-workspace", "writable": true }
+```
+
+`writable: false` (the default) allows `filesystem_read` only — `filesystem_write` and `terminal`
+both refuse even an approved call against a read-only root.
+
+---
+
+## Voice
+
+Push-to-talk only in this first slice — no wake word, no always-listening, no barge-in. Neither
+endpoint is part of a chat turn; see `docs/ARCHITECTURE.md`, "Voice", for how they bracket an
+otherwise-unmodified `POST /api/chat` call.
+
+| Method | Path | Notes |
+|---|---|---|
+| `POST` | `/api/voice/transcribe` | Multipart `file` (a recorded clip). `200` → `{text, language}`. `422` if empty or no speech detected, `413` if over 25 MB, `502` if the engine fails. |
+| `POST` | `/api/voice/speak` | `{text}` → raw `audio/wav` bytes in the response body. `422` if `text` is empty, `502` if the engine fails. |
+
+Both endpoints write a temporary file under the data directory's `voice/` folder and delete it in
+a `finally` block before responding — nothing is retained after the request completes, success or
+failure. See docs/PRIVACY.md, "Voice", for the full data-retention statement.
+
+### Engine choice and evaluation
+
+| | STT: `faster-whisper` | TTS: `pyttsx3` |
+|---|---|---|
+| Model | `tiny.en`, ~75 MB | none — uses OS voices already installed |
+| Backend | CTranslate2 (no PyTorch) | SAPI5 (Windows), NSSpeechSynthesizer (macOS, untested), espeak (Linux, untested) |
+| Load time | ~3s once cached (~60–100s first download) | instant, nothing to download |
+| RAM | roughly 200–400 MB resident once loaded | negligible — delegates to the OS |
+| Latency (short clip, this machine) | ~1s to transcribe | ~1–3s to synthesize a sentence |
+| License | MIT (both the wrapper and the Whisper weights) | MIT (`pyttsx3`); underlying OS engine's own terms |
+| Offline | fully, after the one-time model download | fully, always |
+| Confirmed working here | yes — real transcription tested, not assumed | yes — real synthesis tested, not assumed |
+
+Alternatives considered and why they weren't the first choice: plain `openai-whisper` pulls in a
+full PyTorch install, a large dependency this project has avoided everywhere else, for a CPU
+inference speed disadvantage against CTranslate2. Piper (local, neural, much better voice quality
+than `pyttsx3`) was the presumed default going in, but this milestone's stated priority is
+reliability over quality for the *first* slice — `pyttsx3` needs no model fetch at all, so it
+cannot fail a first run the way a multi-hundred-MB Piper voice download could. Piper remains the
+documented next `TTSProvider`.
+
+Both are swappable per `voice.stt_provider`/`voice.tts_provider` settings
+(`gaia/services/settings_service.py`) — no Settings UI for this yet, same gap as workspace roots.
+
+---
+
 ## Backups
 
 | Method | Path | Notes |
@@ -153,4 +216,5 @@ Backups contain conversations and settings. They do **not** contain API keys.
 `/api/memory`, `/api/projects`, `/api/research`, `/api/simulations`, `/api/study` are named in
 the roadmap but **are not implemented**. They return `404`. Check `/api/capabilities` rather than
 assuming. The tool-call loop itself is live (`/api/chat` and `/api/chat/tool-confirmations/{id}`,
-above) — only Calculator is registered so far; Python, filesystem and terminal tools are not.
+above), with all five tools from Milestone 2's original scope registered: calculator,
+python_sandbox, filesystem_read, filesystem_write, terminal.

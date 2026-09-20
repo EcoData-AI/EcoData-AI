@@ -24,6 +24,10 @@ dependencies = [
     # over httpx because they are generic OpenAI-compatible / Ollama endpoints
     # with no official SDK of their own.
     "anthropic>=0.116",
+    # Voice (Milestone 3, first slice): local STT/TTS only, no cloud dependency.
+    # See docs/ARCHITECTURE.md, "Voice" section, for why these two specifically.
+    "faster-whisper>=1.0",
+    "pyttsx3>=2.90",
 ]
 
 [project.optional-dependencies]

@@ -21,6 +21,10 @@ MAX_TOKENS = "llm.max_tokens"
 THEME = "appearance.theme"
 ONBOARDING_COMPLETE = "general.onboarding_complete"
 COST_LIMIT_USD = "llm.monthly_cost_limit_usd"
+# Which engine handles speech — same "swap without touching the pipeline"
+# story as ACTIVE_PROVIDER above, one layer down (gaia/voice/registry.py).
+STT_PROVIDER = "voice.stt_provider"
+TTS_PROVIDER = "voice.tts_provider"
 
 DEFAULTS: dict[str, Any] = {
     ACTIVE_PROVIDER: "anthropic",
@@ -31,6 +35,8 @@ DEFAULTS: dict[str, Any] = {
     THEME: "system",
     ONBOARDING_COMPLETE: False,
     COST_LIMIT_USD: None,
+    STT_PROVIDER: "faster_whisper",
+    TTS_PROVIDER: "pyttsx3",
 }
 
 #: Per-provider configuration lives under `provider.<id>` as a JSON blob.

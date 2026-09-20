@@ -144,3 +144,27 @@ class CapabilityOut(BaseModel):
     available: bool
     milestone: int
     detail: str
+
+
+class WorkspaceRootOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    path: str
+    writable: bool
+    enabled: bool
+    created_at: datetime
+
+
+class WorkspaceRootCreate(BaseModel):
+    path: str = Field(min_length=1, max_length=1000)
+    writable: bool = False
+
+
+class TranscribeResponse(BaseModel):
+    text: str
+    language: str | None = None
+
+
+class SpeakRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=10_000)

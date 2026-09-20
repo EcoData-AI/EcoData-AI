@@ -30,6 +30,20 @@ MOCK_MODEL_ID = "mock-echo"
 #: end-to-end in tests with no real provider or credentials.
 CALC_TRIGGER = "calc:"
 
+#: Same idea, for the CONFIRM-risk python_sandbox tool — the rest of the
+#: message becomes the `code` argument.
+PYEXEC_TRIGGER = "pyexec:"
+
+#: Same idea, for the SAFE-risk filesystem_read tool — the rest of the message
+#: is the path.
+FSREAD_TRIGGER = "fsread:"
+
+#: Same idea, for the CONFIRM-risk filesystem_write tool — "path|content".
+FSWRITE_TRIGGER = "fswrite:"
+
+#: Same idea, for the CONFIRM-risk terminal tool — "cwd|command".
+TERMINAL_TRIGGER = "term:"
+
 #: A user message starting with this always re-requests a tool call, even after
 #: a tool result comes back — used to test the loop's iteration cap against a
 #: model that never stops calling tools.
@@ -111,6 +125,74 @@ class MockProvider(LLMProvider):
                 tool_calls=[
                     ToolCallRequest(
                         id="mock-call-1", name="calculator", arguments={"expression": expression}
+                    )
+                ],
+            )
+            yield StreamEvent(
+                type="usage", usage=Usage(input_tokens=len(last_user.split()), output_tokens=0)
+            )
+            yield StreamEvent(type="done", stop_reason="tool_use")
+            return
+
+        if tools and last_user.strip().lower().startswith(PYEXEC_TRIGGER):
+            code = last_user.split(":", 1)[1].strip()
+            yield StreamEvent(
+                type="tool_use",
+                tool_calls=[
+                    ToolCallRequest(
+                        id="mock-call-1", name="python_sandbox", arguments={"code": code}
+                    )
+                ],
+            )
+            yield StreamEvent(
+                type="usage", usage=Usage(input_tokens=len(last_user.split()), output_tokens=0)
+            )
+            yield StreamEvent(type="done", stop_reason="tool_use")
+            return
+
+        if tools and last_user.strip().lower().startswith(FSREAD_TRIGGER):
+            path = last_user.split(":", 1)[1].strip()
+            yield StreamEvent(
+                type="tool_use",
+                tool_calls=[
+                    ToolCallRequest(
+                        id="mock-call-1", name="filesystem_read", arguments={"path": path}
+                    )
+                ],
+            )
+            yield StreamEvent(
+                type="usage", usage=Usage(input_tokens=len(last_user.split()), output_tokens=0)
+            )
+            yield StreamEvent(type="done", stop_reason="tool_use")
+            return
+
+        if tools and last_user.strip().lower().startswith(FSWRITE_TRIGGER):
+            path, _, content = last_user.split(":", 1)[1].partition("|")
+            yield StreamEvent(
+                type="tool_use",
+                tool_calls=[
+                    ToolCallRequest(
+                        id="mock-call-1",
+                        name="filesystem_write",
+                        arguments={"path": path.strip(), "content": content},
+                    )
+                ],
+            )
+            yield StreamEvent(
+                type="usage", usage=Usage(input_tokens=len(last_user.split()), output_tokens=0)
+            )
+            yield StreamEvent(type="done", stop_reason="tool_use")
+            return
+
+        if tools and last_user.strip().lower().startswith(TERMINAL_TRIGGER):
+            cwd, _, cmd = last_user.split(":", 1)[1].partition("|")
+            yield StreamEvent(
+                type="tool_use",
+                tool_calls=[
+                    ToolCallRequest(
+                        id="mock-call-1",
+                        name="terminal",
+                        arguments={"cwd": cwd.strip(), "command": cmd},
                     )
                 ],
             )

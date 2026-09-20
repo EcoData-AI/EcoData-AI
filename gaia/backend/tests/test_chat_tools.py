@@ -146,3 +146,30 @@ def test_unavailable_tool_name_is_reported_without_crashing_the_turn(mock_client
     tool_result = next(data for name, data in events if name == "tool_result")
     assert tool_result["ok"] is False
     assert "not available" in tool_result["error"]
+
+
+def test_filesystem_read_call_is_safe_and_completes_the_turn(mock_client, session, tmp_path):
+    from gaia.services import workspace_service
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "note.txt").write_text("contents from the workspace")
+    workspace_service.add_root(session, path=str(workspace), writable=False)
+
+    conversation_id = mock_client.post("/api/conversations", json={}).json()["id"]
+    target = str(workspace / "note.txt")
+    events = run_turn(mock_client, conversation_id, f"fsread:{target}")
+    names = [name for name, _ in events]
+
+    # SAFE, like calculator: no confirmation pause.
+    assert "tool_confirm_required" not in names
+    assert "error" not in names
+
+    tool_call = next(data for name, data in events if name == "tool_call")
+    assert tool_call["risk_level"] == "safe"
+    tool_result = next(data for name, data in events if name == "tool_result")
+    assert tool_result["ok"] is True
+    assert tool_result["content"] == "contents from the workspace"
+
+    messages = mock_client.get(f"/api/conversations/{conversation_id}/messages").json()
+    assert "contents from the workspace" in messages[-1]["content"]

@@ -28,12 +28,19 @@ def test_capabilities_are_reported_honestly(client):
 
     assert capabilities["chat"]["available"] is True
     assert capabilities["history"]["available"] is True
-    # Milestone 2's first step: Calculator is live, so the tool system itself
-    # is no longer claimed as unbuilt — but nothing built on top of it is.
+    # Milestone 2: the tool system itself and every tool shipped so far
+    # (calculator, python_sandbox, filesystem_read/write, terminal) are no
+    # longer claimed as unbuilt.
     assert capabilities["tools"]["available"] is True
+    assert capabilities["python"]["available"] is True
+    assert capabilities["filesystem"]["available"] is True
+    assert capabilities["terminal"]["available"] is True
+    # Milestone 3: voice (first slice) shipped ahead of Memory/Projects — it
+    # depended on no earlier unbuilt milestone and was ready first.
+    assert capabilities["voice"]["available"] is True
 
     # None of these ship yet; the API must not claim otherwise.
-    for key in ("python", "memory", "research", "voice", "simulation"):
+    for key in ("memory", "research", "simulation"):
         assert capabilities[key]["available"] is False
         assert capabilities[key]["milestone"] > 1
 
@@ -51,8 +58,7 @@ def test_system_status_marks_unbuilt_components(client):
     assert names["Database"] == "ok"
     # With no API key configured, the LLM must not report "ok".
     assert names["LLM"] in {"not_configured", "error"}
-    assert names["Python sandbox"] == "not_built"
-    assert names["Voice"] == "not_built"
+    assert names["Memory"] == "not_built"
 
 
 def test_system_status_reports_a_built_capability_as_ok(client):
@@ -62,6 +68,10 @@ def test_system_status_reports_a_built_capability_as_ok(client):
     body = client.get("/api/system/status").json()
     names = {c["name"]: c["state"] for c in body["components"]}
     assert names["Tool system"] == "ok"
+    assert names["Python sandbox"] == "ok"
+    assert names["Filesystem access"] == "ok"
+    assert names["Terminal"] == "ok"
+    assert names["Voice"] == "ok"
 
 
 def test_privacy_dashboard_marks_cloud_inference(client):

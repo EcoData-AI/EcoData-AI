@@ -106,6 +106,17 @@ class Settings(BaseSettings):
         return self.data_dir / "sandbox"
 
     @property
+    def voice_dir(self) -> Path:
+        """Scratch space for one request's audio, in and out.
+
+        Nothing here is meant to outlive the request that created it — see
+        `api/voice.py`, which deletes each file in a `finally` block as soon
+        as it has been used. This directory existing at all is not evidence
+        anything is being retained; it should be empty between requests.
+        """
+        return self.data_dir / "voice"
+
+    @property
     def config_dir(self) -> Path:
         return self.data_dir / "config"
 
@@ -137,6 +148,7 @@ class Settings(BaseSettings):
             self.experiments_dir,
             self.memory_dir,
             self.sandbox_dir,
+            self.voice_dir,
             self.config_dir,
             self.backups_dir,
         ):

@@ -490,6 +490,44 @@ select {
   margin-top: 8px;
 }
 
+.tool-call__path {
+  margin-bottom: 4px;
+  color: var(--text-faint);
+}
+
+.tool-call__listing {
+  margin: 0;
+  padding: 0 0 0 4px;
+  list-style: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.tool-call__listing li {
+  padding: 1px 0;
+}
+
+.tool-call__size {
+  color: var(--text-faint);
+}
+
+.tool-call__preview {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
 .cursor {
   display: inline-block;
   width: 7px;
@@ -555,6 +593,79 @@ select {
   color: var(--text-faint);
   display: flex;
   gap: 12px;
+}
+
+.composer__mic {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 14px;
+  color: var(--text-faint);
+}
+
+.composer__mic[data-voice-state='listening'] {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-bg);
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+
+.composer__mic[data-voice-state='transcribing'],
+.composer__mic[data-voice-state='speaking'] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.composer__mic[data-voice-state='error'] {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+@keyframes voice-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer__mic[data-voice-state='listening'] {
+    animation: none;
+  }
+}
+
+.voice-status {
+  margin-bottom: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  display: inline-flex;
+  width: fit-content;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.voice-status--listening {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.voice-status--transcribing,
+.voice-status--speaking {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.voice-status--error {
+  color: var(--warn);
+  border-color: var(--warn);
+  background: var(--warn-bg);
 }
 
 /* -------------------------------------------------------------- notices */

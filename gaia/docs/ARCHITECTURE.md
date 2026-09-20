@@ -140,8 +140,12 @@ rejected one is a hard failure.
 ## Tool system
 
 `gaia/tools/` mirrors `gaia/llm/` on purpose: a small ABC (`base.py`), a registry that is the
-single place that knows what exists (`registry.py`), and one module per tool. Calculator
-(`calculator.py`) is the only tool that ships in Milestone 2's first step.
+single place that knows what exists (`registry.py`), and one module per tool. Five tools ship so
+far — Milestone 2's full original scope: `calculator.py` (`SAFE`), `python_sandbox.py`
+(`CONFIRM`), `filesystem.py`'s `FilesystemReadTool` (`SAFE`) / `FilesystemWriteTool` (`CONFIRM`),
+and `terminal.py`'s `TerminalTool` (`CONFIRM`). Read/write are two classes, not one tool with a
+risk-varying argument, because `risk_level` is fixed per class and must never depend on what a
+request asks for.
 
 ```python
 class Tool(abc.ABC):
@@ -173,9 +177,50 @@ uses a small side channel (`services/tool_confirmation.py`): an in-memory `{call
 asyncio.Future}` map. The turn's generator `await`s its own future after yielding
 `tool_confirm_required`; `POST /api/chat/tool-confirmations/{call_id}` resolves it. Nothing here
 is persisted — a confirmation lost to a restart auto-denies after five minutes, consistent with
-chat turns already having no server-side cancellation (see "Known limits" below). Calculator is
-SAFE and never touches this path; it exists now so filesystem and terminal need no further
-plumbing here when they ship.
+chat turns already having no server-side cancellation (see "Known limits" below). This path was
+built speculatively alongside Calculator (which never touches it, being `SAFE`) and is now
+exercised for real by `python_sandbox`, including over a live connection
+(`test_chat_tools_confirm.py`), not just in isolation.
+
+**`python_sandbox` is a different risk class from `calculator`, and its docstring says so
+plainly.** It runs arbitrary code in a subprocess with a wall-clock timeout, a sanitised
+environment (GAIA's own secrets are never in it), and a dedicated working directory
+(`config.sandbox_dir`) — but on Windows there is no memory/CPU/process ceiling (the `resource`
+module the POSIX path uses does not exist there), and the subprocess shares the backend's own
+venv, so sandboxed code can `import gaia` and reach the app's database and secrets modules at the
+Python level. Neither gap is silently accepted: they are why this tool is `CONFIRM`, not `SAFE` —
+the human approval is real protection today even where the technical sandboxing is partial. Full
+containment needs a separate restricted interpreter or OS-level isolation (a container, a VM,
+Windows Sandbox), not attempted yet.
+
+**`filesystem_read`/`filesystem_write`** use the `workspace_roots` table (schema-only until this
+milestone) to decide what exists at all: with no root registered, both tools say so rather than
+falling back to some default directory. Containment is `Path.resolve()` plus a `relative_to`
+containment check against every enabled root — never string or prefix matching, which `..` and
+symlinks defeat. A root's own `writable` flag gates the write tool independently of the tool's own
+`CONFIRM` risk level: a read-only root refuses writes even with approval. Registering a root
+(`POST /api/workspace/roots`, `api/workspace.py`) is a user-initiated settings change, not a
+model-invoked tool call — it carries no `ToolCall` row and no risk gate, the same way setting a
+provider API key doesn't. There is no Settings UI tab for it yet; roots are added through the API
+directly for now. This containment logic (`resolve_within_workspace`) lives in
+`services/workspace_service.py`, not in `filesystem.py`, specifically so `terminal.py` can share
+it rather than reimplementing the same check.
+
+**`terminal`** runs a shell command (`subprocess.run(..., shell=True)`) inside a `cwd` that must
+resolve to an enabled, *writable* workspace root — the same mechanism as `filesystem_write`,
+required even for a command that looks read-only, because a shell can always do more than it
+appears to. Beyond the `CONFIRM` gate itself, a pattern-based blocklist
+(`terminal._blocked_reason`) refuses a short list of unambiguously destructive commands —
+recursive deletion, disk formatting, disabling Windows Defender or a Linux firewall, the classic
+fork-bomb signature — **even after approval**, matching `docs/SECURITY.md`'s own risk table, which
+puts those at `BLOCKED`-tier rather than merely `CONFIRM`-tier. This is pattern matching on the
+command's tokens (`shlex`-split, checked for actual flag tokens rather than substring search — so
+`git push --force` and `docker rm -f` are correctly left alone, since neither is `rm -r`), **not a
+security boundary**: it stops the obvious literal forms a model might plainly ask for, not
+deliberate evasion. The primary defence stays the confirmation itself — the user sees the exact
+command before anything runs. `python_sandbox.py`'s subprocess-safety plumbing (minimal
+environment, POSIX `resource.setrlimit`, output truncation) was extracted into
+`tools/_process_safety.py` so this tool didn't reimplement it a third time.
 
 **Provider translation.** `LLMProvider.stream_chat` takes an optional `tools` argument (a list of
 provider-neutral `{name, description, parameters}` specs) and can emit a
@@ -189,6 +234,77 @@ requested; `chat_service` decides whether and how it runs.
 (`auto`/`approved`/`denied`), status, timing, and a truncated result summary — written regardless
 of outcome. The table already existed in the initial schema (see "Database" below); this
 milestone is what starts writing to it.
+
+## Voice
+
+`gaia/voice/` mirrors `gaia/llm/` and `gaia/tools/` on purpose — same small ABC (`base.py`), same
+single-registry pattern (`registry.py`) — but it is a **peer** of those two families, not a
+dependent of either. `STTProvider`/`TTSProvider` never see a conversation, never call the model,
+and are never invoked as a tool call:
+
+```python
+class STTProvider(abc.ABC):
+    async def health(self) -> ProviderHealth
+    async def transcribe(self, audio_path: str) -> TranscriptionResult
+
+class TTSProvider(abc.ABC):
+    async def health(self) -> ProviderHealth
+    async def synthesize(self, text: str, *, out_path: str) -> SynthesisResult
+```
+
+**Voice sits entirely outside the chat turn.** `chat_service.py` has no idea it exists — zero
+lines changed there for this milestone. The pipeline is two ordinary HTTP calls bracketing an
+otherwise-untouched turn:
+
+```
+mic capture (frontend)
+      │
+      ▼
+POST /api/voice/transcribe  ──▶  STTProvider.transcribe()  ──▶  {text}
+      │
+      ▼
+POST /api/chat  ── the exact same call a typed message makes — SSE, tool loop,
+      │            ToolCall audit, everything, unmodified
+      ▼
+{final assistant text, already persisted}
+      │
+      ▼
+POST /api/voice/speak  ──▶  TTSProvider.synthesize()  ──▶  audio/wav bytes
+      │
+      ▼
+playback (frontend, <audio>/Web Audio)
+```
+
+A spoken request is indistinguishable from a typed one by the time it reaches `send()` in
+`store/chat.ts` — `store/voice.ts` calls the same `useChatStore.getState().send(text)` a typed
+message uses, so tool calls, confirmations, and the audit trail all work identically regardless
+of how the text arrived. This is deliberate, not incidental: see "The chat turn" above for why
+nothing upstream of `send()` should ever need to know.
+
+**Providers, and why these two.** `faster_whisper` (STT) and `pyttsx3` (TTS) — both installed and
+confirmed working on this machine before being adopted, not assumed. Full evaluation (RAM, load
+time, accuracy, licensing, alternatives) lives in `docs/API.md`'s Voice section rather than
+duplicated here; the short version: `faster-whisper`'s `tiny.en` model runs on CTranslate2 (no
+PyTorch dependency, unlike this project's other choices), loads in ~3s once cached, and produced
+usable transcriptions in testing. `pyttsx3` wraps the OS's own speech engine (SAPI5 on Windows) —
+zero model download, so it can never fail a first run while fetching a multi-hundred-MB voice
+model. Both are registered in `voice.stt_provider`/`voice.tts_provider` settings
+(`settings_service.py`), the same swap-without-code-changes story `llm.active_provider` already
+gives chat providers. Piper (local, neural, much better prosody) is the documented next
+`TTSProvider` once voice quality matters more than "does the pipeline work at all."
+
+**A real reliability finding, not a hypothetical one:** `pyttsx3.runAndWait()` was found to hang
+indefinitely — not raise — when pointed at an output path whose parent directory doesn't exist,
+because the "utterance finished" event it waits on never fires if the write never happened. Fixed
+with two independent guards: the output directory is checked before the engine is ever touched,
+and the whole call is wrapped in a wall-clock `asyncio.wait_for` as a backstop against any other
+cause of the same failure mode. `faster_whisper`'s transcription carries the same kind of timeout
+as a matter of consistency, though CPU-bound decode work is far less prone to hanging than a call
+into an OS API.
+
+**Audio lifecycle.** Every temporary file — an incoming recording, a synthesized reply — is
+written under `config.voice_dir` and deleted in a `finally` block before its endpoint returns.
+Nothing here is meant to outlive the single request that created it; see docs/PRIVACY.md, "Voice".
 
 ## Context builder
 
@@ -212,8 +328,8 @@ The full schema from the brief exists up front so migrations stay linear as mile
 | `conversations`, `messages` | `projects`, `project_tasks`, `memories` |
 | `settings`, `task_runs` | `documents`, `document_chunks` |
 | `tool_calls` (audit — live from Milestone 2) | `experiments`, `simulation_runs` |
-| | `study_plans`, `learning_progress` |
-| | `permissions`, `workspace_roots` |
+| `workspace_roots` (live from Milestone 2) | `study_plans`, `learning_progress` |
+| | `permissions` |
 
 `messages.sequence` is a monotonic per-conversation integer with a uniqueness constraint —
 timestamps collide under streaming, so ordering cannot depend on them. Alembic runs
@@ -236,7 +352,7 @@ The brief's §3 and §53 are enforced structurally rather than by remembering:
 
 - **No conversation summarisation.** The `summary` column and the context builder support it,
   but nothing writes one, so a very long conversation drops its oldest turns instead of
-  compacting them. Milestone 3.
+  compacting them. Milestone 4.
 - **`sqlite+pysqlite` with sync sessions inside async endpoints.** Local SQLite writes are
   sub-millisecond, so they run inline. This becomes a real blocking concern only if storage
   moves off local SQLite, at which point the async engine (`aiosqlite`, already in the URL

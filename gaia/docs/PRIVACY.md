@@ -14,8 +14,12 @@ from the running configuration rather than written by hand.
 | Logs | **LOCAL** | Rotated JSON in your data directory |
 | Backups | **LOCAL** | Written only when you ask |
 | LLM inference | **LOCAL or CLOUD** | Depends on the provider you chose |
+| Python execution | **LOCAL** | Isolated subprocess, requires your approval every time |
+| Filesystem access | **LOCAL** | Only inside directories you explicitly allow |
+| Terminal commands | **LOCAL** | Requires your approval every time; a directory you allowed |
+| Voice (microphone, synthesized speech) | **LOCAL** | See "Voice" below — nothing is sent anywhere, nothing is kept |
 | Telemetry / analytics | **none** | GAIA collects nothing and phones home to nobody |
-| Memory, documents, Python, web search | **not built** | Milestones 2–6 |
+| Memory, documents, web search | **not built** | Milestones 3–6 |
 
 ## What leaves your machine
 
@@ -74,11 +78,29 @@ like a secret as a backstop; no code path passes a key to a logger in the first 
 
 There is no server-side copy to request deletion of, because there is no server.
 
+## Voice
+
+Push-to-talk only — GAIA is never listening unless you are actively holding/clicking the
+microphone button. There is no wake word and no always-on recording in this version.
+
+- **Your recording** is uploaded to the local backend, transcribed by a local speech-to-text
+  engine (`faster-whisper`, running entirely on this machine — see docs/API.md), written to a
+  temporary file for the duration of that one request, and deleted immediately after — win or
+  fail. It is never sent to a cloud service, never logged, and never stored in the database.
+- **GAIA's spoken replies** are synthesized locally too (`pyttsx3`, using your operating system's
+  own voices) from text that was already going to be shown to you on screen. The synthesized
+  audio is generated, played, and not retained — same temporary-file-then-delete lifecycle as a
+  recording.
+- Nothing about a voice request differs from a typed one once it reaches the model: no additional
+  data is sent to a cloud LLM provider because you used voice instead of typing.
+- If the microphone is unavailable or you deny permission, GAIA reports that plainly — see
+  docs/API.md, "Voice" — and text chat is unaffected either way.
+
 ## Features that are not built yet
 
-Memory, document ingestion, Python execution and web search do not exist in v0.1. They are
-listed in the dashboard as `NOT BUILT` rather than omitted, so the list stays a complete account
-of GAIA's data surface as features land. When they arrive:
+Memory, document ingestion, and web search do not exist yet. They are listed in the dashboard as
+`NOT BUILT` rather than omitted, so the list stays a complete account of GAIA's data surface as
+features land. When they arrive:
 
-- Memory, documents and Python will be **local**, and memory will be opt-in and inspectable.
+- Memory and documents will be **local**, and memory will be opt-in and inspectable.
 - Web search will be **external**, and will be labelled as such at the point of use.
