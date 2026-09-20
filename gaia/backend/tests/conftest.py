@@ -26,6 +26,11 @@ def gaia_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     # Keys must never be read from the developer's real environment during tests.
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    # Never touch the real OS keyring: it's shared with the actual GAIA app under
+    # the same service name, so a test writing to it would both leak across test
+    # runs and corrupt the developer's real stored keys. Force the isolated,
+    # per-test file fallback instead.
+    monkeypatch.setattr("gaia.core.secrets._keyring", lambda: None)
 
     reset_settings_cache()
     db_session.dispose_engine()
