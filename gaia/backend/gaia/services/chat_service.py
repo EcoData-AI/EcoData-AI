@@ -20,6 +20,7 @@ concern and should move to the async engine.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -34,7 +35,13 @@ from gaia.db.base import utcnow
 from gaia.db.models import Message, TaskRun, ToolCall
 from gaia.llm.base import ChatMessage, LLMProvider, ProviderError, ToolCallRequest
 from gaia.llm.registry import build_provider
-from gaia.services import conversation_service, settings_service, tool_confirmation
+from gaia.services import (
+    conversation_service,
+    memory_service,
+    settings_service,
+    summarization_service,
+    tool_confirmation,
+)
 from gaia.tools.base import RiskLevel, ToolResult
 from gaia.tools.registry import get_tool, tool_specs_for_provider
 
@@ -231,13 +238,17 @@ async def stream_turn(session: Session, request: TurnRequest) -> AsyncIterator[s
         return
 
     history = conversation_service.get_messages(session, conversation.id)
+    memories = memory_service.relevant_memories(session)
     context = build_context(
         history=history,
         context_window=context_window,
         custom_instructions=settings_service.get(session, settings_service.CUSTOM_INSTRUCTIONS),
         conversation_system_prompt=conversation.system_prompt,
         summary=conversation.summary,
+        memories=memories,
     )
+    if memories:
+        memory_service.mark_used(session, [m.id for m in memories])
 
     assistant = Message(
         conversation_id=conversation.id,
@@ -373,6 +384,20 @@ async def stream_turn(session: Session, request: TurnRequest) -> AsyncIterator[s
     task.progress = 1.0
     task.finished_at = utcnow()
     session.commit()
+
+    if context.oldest_kept_sequence is not None:
+        # Detached, not awaited: this generator can be torn down the instant the
+        # client consumes the `done` event below, and summarisation must not
+        # depend on the request outliving that. See summarization_service's
+        # module docstring.
+        asyncio.create_task(
+            summarization_service.summarize_in_background(
+                conversation_id=conversation.id,
+                oldest_kept_sequence=context.oldest_kept_sequence,
+                provider_id=provider.id,
+                model_id=model_id,
+            )
+        )
 
     logger.info(
         "chat turn complete",

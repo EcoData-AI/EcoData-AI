@@ -64,7 +64,18 @@ context builder · projects with goals, tasks, notes and their own memory · pro
 context.
 
 Acceptance: "remember that I prefer formal notation", see it in the Memory screen, delete it,
-and watch it stop influencing replies.
+and watch it stop influencing replies. **Verified** for the memory half below; projects remains
+open.
+
+**✅ Memory, first slice** *(shipped)* — semantic and episodic memory via an opt-in, CONFIRM-gated
+`remember` tool; the Memory screen (search, edit, disable, delete); conversation summarisation
+feeding the context builder, closing the gap `docs/ARCHITECTURE.md`'s "Known limits" flagged.
+Shipped as its own slice the way Voice shipped ahead of Memory/Projects in Milestone 3 — Projects
+needed more design (goals/tasks UI, project-aware context, project-scoped memory) and depended on
+nothing memory itself needed to ship.
+
+**⛔ Projects** — still pending: goals, tasks, notes, a Projects screen, project-scoped memory
+(the `project` memory `kind`), and project-aware context via `Conversation.project_id`.
 
 ## Milestone 5 — Documents and retrieval
 

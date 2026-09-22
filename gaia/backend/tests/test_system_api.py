@@ -38,9 +38,11 @@ def test_capabilities_are_reported_honestly(client):
     # Milestone 3: voice (first slice) shipped ahead of Memory/Projects — it
     # depended on no earlier unbuilt milestone and was ready first.
     assert capabilities["voice"]["available"] is True
+    # Milestone 4, first slice: memory shipped; Projects is still pending.
+    assert capabilities["memory"]["available"] is True
 
     # None of these ship yet; the API must not claim otherwise.
-    for key in ("memory", "research", "simulation"):
+    for key in ("projects", "research", "simulation"):
         assert capabilities[key]["available"] is False
         assert capabilities[key]["milestone"] > 1
 
@@ -58,7 +60,7 @@ def test_system_status_marks_unbuilt_components(client):
     assert names["Database"] == "ok"
     # With no API key configured, the LLM must not report "ok".
     assert names["LLM"] in {"not_configured", "error"}
-    assert names["Memory"] == "not_built"
+    assert names["Projects"] == "not_built"
 
 
 def test_system_status_reports_a_built_capability_as_ok(client):
@@ -72,6 +74,7 @@ def test_system_status_reports_a_built_capability_as_ok(client):
     assert names["Filesystem access"] == "ok"
     assert names["Terminal"] == "ok"
     assert names["Voice"] == "ok"
+    assert names["Memory"] == "ok"
 
 
 def test_privacy_dashboard_marks_cloud_inference(client):
@@ -104,6 +107,12 @@ def test_privacy_dashboard_lists_voice(client):
     assert rows["Voice"]["location"] == "LOCAL"
 
 
+def test_privacy_dashboard_reports_memory_as_shipped(client):
+    # Milestone 4, first slice: memory must not still be listed NOT BUILT.
+    rows = {row["label"]: row for row in client.get("/api/privacy").json()}
+    assert rows["Memory"]["location"] == "LOCAL"
+
+
 def test_privacy_dashboard_lists_logs_and_backups(client):
     # docs/PRIVACY.md documents both rows; the API had never actually listed them.
     rows = {row["label"]: row for row in client.get("/api/privacy").json()}
@@ -115,7 +124,6 @@ def test_privacy_dashboard_not_built_rows_cite_current_milestones(client):
     # These drifted out of sync with core/capabilities.py's renumbering once
     # before (Python execution) — pin the milestone numbers so it can't again.
     rows = {row["label"]: row for row in client.get("/api/privacy").json()}
-    assert "Milestone 4" in rows["Memory"]["detail"]
     assert "Milestone 5" in rows["Documents"]["detail"]
     assert "Milestone 7" in rows["Web search"]["detail"]
 

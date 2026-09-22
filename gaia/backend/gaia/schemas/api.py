@@ -161,6 +161,26 @@ class WorkspaceRootCreate(BaseModel):
     writable: bool = False
 
 
+class MemoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    kind: str
+    content: str
+    source: str | None = None
+    importance: float
+    enabled: bool
+    last_used_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class MemoryUpdate(BaseModel):
+    content: str | None = Field(default=None, min_length=1)
+    importance: float | None = Field(default=None, ge=0.0, le=1.0)
+    enabled: bool | None = None
+
+
 class TranscribeResponse(BaseModel):
     text: str
     language: str | None = None

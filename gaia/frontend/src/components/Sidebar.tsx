@@ -3,6 +3,7 @@ import type { Capability, Conversation } from '@/lib/api'
 
 export type ViewId =
   | 'chat'
+  | 'memory'
   | 'study'
   | 'projects'
   | 'research'
@@ -21,6 +22,7 @@ interface NavEntry {
 
 const NAV: NavEntry[] = [
   { id: 'chat', label: 'Chat', icon: '◆' },
+  { id: 'memory', label: 'Memory', icon: '◈', capability: 'memory' },
   { id: 'study', label: 'Study', icon: '◇', capability: 'study' },
   { id: 'projects', label: 'Projects', icon: '▤', capability: 'projects' },
   { id: 'research', label: 'Research', icon: '◎', capability: 'research' },

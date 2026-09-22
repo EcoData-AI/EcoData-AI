@@ -113,6 +113,18 @@ export interface SystemStatus {
   active_model: string | null
 }
 
+export interface Memory {
+  id: string
+  kind: string
+  content: string
+  source: string | null
+  importance: number
+  enabled: boolean
+  last_used_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface PrivacyRow {
   label: string
   location: string
@@ -234,6 +246,19 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ approved }),
     }),
+
+  listMemories: (params?: { q?: string; kind?: string }) => {
+    const query = new URLSearchParams()
+    if (params?.q) query.set('q', params.q)
+    if (params?.kind) query.set('kind', params.kind)
+    const suffix = query.toString() ? `?${query.toString()}` : ''
+    return request<Memory[]>(`/api/memory${suffix}`)
+  },
+
+  updateMemory: (id: string, patch: { content?: string; importance?: number; enabled?: boolean }) =>
+    request<Memory>(`/api/memory/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  deleteMemory: (id: string) => request<void>(`/api/memory/${id}`, { method: 'DELETE' }),
 
   exportBackupUrl: () => `${apiBase()}/api/backup/export`,
 

@@ -150,7 +150,12 @@ def privacy(session: Session = Depends(get_session)) -> list[PrivacyRow]:
             ),
         ),
         PrivacyRow(
-            label="Memory", location="NOT BUILT", detail="Planned for Milestone 4. Will be local."
+            label="Memory",
+            location="LOCAL",
+            detail=(
+                "Stored only when you ask GAIA to remember something, and only after you "
+                "approve it. Inspect, edit or delete anything remembered on the Memory screen."
+            ),
         ),
         PrivacyRow(
             label="Documents",

@@ -30,7 +30,7 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability("filesystem", "Filesystem access", True, 2, "Workspace-scoped read and write."),
     Capability("terminal", "Terminal", True, 2, "Audited command execution with approvals."),
     Capability("voice", "Voice", True, 3, "Speech-to-text and text-to-speech (first slice)."),
-    Capability("memory", "Memory", False, 4, "Inspectable episodic and semantic memory."),
+    Capability("memory", "Memory", True, 4, "Inspectable episodic and semantic memory."),
     Capability("projects", "Projects", False, 4, "Goals, tasks, notes and project context."),
     Capability("knowledge", "Documents & RAG", False, 5, "PDF/CSV/Markdown ingestion, retrieval."),
     Capability("tutor", "Tutor mode", False, 6, "Socratic teaching with spaced repetition."),

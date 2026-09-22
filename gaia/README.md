@@ -6,10 +6,10 @@ GAIA is software: a program that runs language models and tools on your behalf. 
 conscious and does not pretend to be. Your conversations, settings and data stay on your
 machine; you choose which model provider — cloud or fully local — answers your questions.
 
-> **Status: Beta v0.1 — Milestones 1–3.**
-> Chat, conversation history, model providers, tools (calculator, Python, filesystem, terminal)
-> and voice (first slice) work. Memory, projects, documents, research, tutoring and simulation
-> are **not built yet**. GAIA says so plainly in the interface and in conversation rather than
+> **Status: Beta v0.1 — Milestones 1–3, plus Memory (Milestone 4, first slice).**
+> Chat, conversation history, model providers, tools (calculator, Python, filesystem, terminal),
+> voice (first slice) and memory work. Projects, documents, research, tutoring and simulation are
+> **not built yet**. GAIA says so plainly in the interface and in conversation rather than
 > pretending otherwise. See [ROADMAP.md](docs/ROADMAP.md).
 
 ---
@@ -27,7 +27,8 @@ machine; you choose which model provider — cloud or fully local — answers yo
 | API keys in the OS keyring, never in the database | ✅ |
 | Tools · Python sandbox · filesystem · terminal, with SAFE/CONFIRM/BLOCKED gating and an audit trail | ✅ |
 | Voice — push-to-talk STT/TTS, fully local | ✅ |
-| Memory · Projects | ⛔ Milestone 4 |
+| Memory — opt-in, CONFIRM-gated `remember` tool, an inspectable Memory screen | ✅ |
+| Projects — goals, tasks, notes, project-aware context | ⛔ Milestone 4 |
 | Documents & RAG | ⛔ Milestone 5 |
 | Tutor · Study | ⛔ Milestone 6 |
 | Research | ⛔ Milestone 7 |
@@ -109,9 +110,9 @@ GAIA/
 ├── backups/      database exports
 ├── config/       credential fallback when no OS keyring is available
 ├── sandbox/      workspace-scoped filesystem and Python sandbox roots
+├── memory/       reserved for later (memory itself lives in database/, below)
 ├── documents/    (Milestone 5)
 ├── projects/     (Milestone 4)
-├── memory/       (Milestone 4)
 └── experiments/  (Milestone 9)
 ```
 

@@ -1,6 +1,6 @@
 # Architecture
 
-GAIA Beta v0.1 — Milestone 1.
+GAIA Beta v0.1 — Milestones 1–3, plus Memory (Milestone 4, first slice).
 
 ## Stack
 
@@ -306,6 +306,66 @@ into an OS API.
 written under `config.voice_dir` and deleted in a `finally` block before its endpoint returns.
 Nothing here is meant to outlive the single request that created it; see docs/PRIVACY.md, "Voice".
 
+## Memory
+
+Milestone 4, first slice. `gaia/services/memory_service.py` owns the CRUD against the `memories`
+table (schema already existed, unused until now); the only writer is
+`gaia/tools/memory.py`'s `RememberTool`.
+
+**`remember` is `CONFIRM`-risk, not `SAFE`.** Every other decision in this milestone follows from
+that one: writing a memory is a persistent, cross-conversation side effect — closer to a
+filesystem write than to the calculator — so the user sees the exact `content` and `kind` before
+anything is stored, the same gate `filesystem_write`/`terminal` already use. The system prompt
+(`core/persona.py`) additionally instructs the model to call it only when the user explicitly
+asks to remember something, never to record its own inference; the CONFIRM gate is the backstop
+if that instruction is ever ignored, not the only defence. `kind` is restricted to
+`"semantic"`/`"episodic"` this slice — `"project"` needs a conversation-to-project link that does
+not exist until Projects ships, and `"knowledge"` belongs to Milestone 5.
+
+**Injection into context is unconditional, not retrieval-based.** `memory_service.
+relevant_memories()` returns every `enabled=True` row, ordered by `importance` then recency, and
+capped at 20 — there is no embedding search yet (that arrives with Milestone 5's RAG work), so
+"relevant" for now just means "not disabled and not crowded out by the cap." `chat_service.
+stream_turn` fetches these once per turn and passes them to `context_builder.build_context`,
+which appends a `## Things to remember about the user` section to the system prompt and marks
+`"memory"` in `sources` — the same additive pattern `summary` already used, so nothing about the
+function's existing contract changed. Included memories get `last_used_at` bumped, which is what
+the Memory screen's ordering could build on later, though nothing reads it yet.
+
+**The Memory screen (`frontend/src/views/Memory.tsx`) is deliberately read/edit/delete/disable
+only — it has no "add memory" control.** The roadmap's own wording for this milestone ("search,
+edit, delete and disable") already excludes creation, and enforcing "the only writer is the
+CONFIRM-gated tool" in the UI as well as the API keeps there being exactly one path memories can
+be created through, with exactly one place that path is gated.
+
+## Conversation summarisation
+
+Milestone 4, first slice. This closes a gap the "Known limits" section below used to list: the
+`Conversation.summary`/`summarized_through` columns and the `context_builder` consumption of them
+existed from Milestone 1, but nothing ever wrote to them, so a long conversation simply dropped
+its oldest turns once the history budget was exceeded rather than compacting them.
+
+`context_builder.build_context` now additionally reports `oldest_kept_sequence` on its
+`BuiltContext` — the `sequence` of the earliest message actually kept this turn, or `None` if
+nothing was dropped. `gaia/services/summarization_service.py`'s `summarize_if_needed` is the pure
+core: given that boundary, it gathers every complete `user`/`assistant` message between
+`conversation.summarized_through` and the boundary, asks the turn's own provider/model for an
+updated summary (folding in whatever summary already existed), and advances
+`summarized_through` — but only on success. A `ProviderError` leaves both columns untouched, so
+the next turn retries the same window rather than silently losing it.
+
+**This runs as a detached `asyncio.Task`, not inline before the turn's `done` event.** An SSE
+generator can be torn down the instant the client consumes `done`, and tying summarisation to
+that request's lifecycle risks it never running at all — the same reasoning `docs/ARCHITECTURE.
+md`'s existing "no request cancellation" known limit already lives with. `chat_service.
+stream_turn` fires `summarization_service.summarize_in_background` with the exact
+`provider_id`/`model_id` the turn itself used (never re-resolved, to avoid racing a
+provider/model change against the user's very next turn) and the `oldest_kept_sequence` that
+turn's own `build_context` computed — recomputing that boundary independently would risk drifting
+from the budgeting logic that produced it. The task opens its own `session_scope()` and swallows
+every exception; a failed summarisation must never surface as a chat-turn error, since by the
+time it runs the turn has already completed successfully.
+
 ## Context builder
 
 `core/context_builder.py` decides what is actually sent. It assembles the persona, the user's
@@ -325,11 +385,11 @@ The full schema from the brief exists up front so migrations stay linear as mile
 
 | Live | Schema only (no API surface) |
 |---|---|
-| `conversations`, `messages` | `projects`, `project_tasks`, `memories` |
+| `conversations`, `messages` | `projects`, `project_tasks` |
 | `settings`, `task_runs` | `documents`, `document_chunks` |
 | `tool_calls` (audit — live from Milestone 2) | `experiments`, `simulation_runs` |
 | `workspace_roots` (live from Milestone 2) | `study_plans`, `learning_progress` |
-| | `permissions` |
+| `memories` (live from Milestone 4) | `permissions` |
 
 `messages.sequence` is a monotonic per-conversation integer with a uniqueness constraint —
 timestamps collide under streaming, so ordering cannot depend on them. Alembic runs
@@ -350,9 +410,11 @@ The brief's §3 and §53 are enforced structurally rather than by remembering:
 
 ## Known limits in v0.1
 
-- **No conversation summarisation.** The `summary` column and the context builder support it,
-  but nothing writes one, so a very long conversation drops its oldest turns instead of
-  compacting them. Milestone 4.
+- **Memory has no retrieval — it's a capped, unconditional list.** `relevant_memories()` returns
+  every enabled memory (up to 20), ranked by importance and recency; there is no embedding search
+  to pick the ones actually relevant to the current turn. Fine at the scale one person's opt-in
+  memories reach; would need real retrieval well before Milestone 5's document RAG work reuses
+  the same idea at larger scale.
 - **`sqlite+pysqlite` with sync sessions inside async endpoints.** Local SQLite writes are
   sub-millisecond, so they run inline. This becomes a real blocking concern only if storage
   moves off local SQLite, at which point the async engine (`aiosqlite`, already in the URL

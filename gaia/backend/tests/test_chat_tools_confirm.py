@@ -205,6 +205,80 @@ def test_filesystem_write_confirm_denied_never_touches_the_file(mock_client, ses
     assert row.status == "failed"
 
 
+def test_remember_confirm_approved_stores_the_memory(mock_client, session):
+    from sqlalchemy import select
+
+    from gaia.db.models import Memory, ToolCall
+
+    conversation_id = mock_client.post("/api/conversations", json={}).json()["id"]
+    out: dict = {}
+    thread = _run_turn_in_background(
+        mock_client, conversation_id, "remember: prefers formal notation", out
+    )
+
+    call_id = _wait_for_pending_call_id()
+    resolve = mock_client.post(f"/api/chat/tool-confirmations/{call_id}", json={"approved": True})
+    assert resolve.status_code == 204
+    thread.join(timeout=30)
+    assert not thread.is_alive()
+
+    result = next(data for name, data in out["events"] if name == "tool_result")
+    assert result["ok"] is True
+
+    memory = session.execute(select(Memory)).scalar_one()
+    assert memory.kind == "semantic"
+    assert memory.content == "prefers formal notation"
+
+    row = session.execute(select(ToolCall).where(ToolCall.id == call_id)).scalar_one()
+    assert row.tool_name == "remember"
+    assert row.risk_level == "confirm"
+    assert row.approval == "approved"
+    assert row.status == "succeeded"
+
+
+def test_remember_confirm_denied_stores_nothing(mock_client, session):
+    from sqlalchemy import select
+
+    from gaia.db.models import Memory, ToolCall
+
+    conversation_id = mock_client.post("/api/conversations", json={}).json()["id"]
+    out: dict = {}
+    thread = _run_turn_in_background(
+        mock_client, conversation_id, "remember: should never be stored", out
+    )
+
+    call_id = _wait_for_pending_call_id()
+    resolve = mock_client.post(f"/api/chat/tool-confirmations/{call_id}", json={"approved": False})
+    assert resolve.status_code == 204
+    thread.join(timeout=30)
+    assert not thread.is_alive()
+
+    result = next(data for name, data in out["events"] if name == "tool_result")
+    assert result["ok"] is False
+
+    assert session.execute(select(Memory)).scalar_one_or_none() is None
+
+    row = session.execute(select(ToolCall).where(ToolCall.id == call_id)).scalar_one()
+    assert row.tool_name == "remember"
+    assert row.approval == "denied"
+    assert row.status == "failed"
+
+
+def test_remembered_memory_is_injected_into_a_later_turns_context(mock_client, session):
+    from gaia.services import memory_service
+
+    memory_service.create_memory(session, kind="semantic", content="prefers formal notation")
+
+    conversation_id = mock_client.post("/api/conversations", json={}).json()["id"]
+    out: dict = {}
+    thread = _run_turn_in_background(mock_client, conversation_id, "hello", out)
+    thread.join(timeout=30)
+    assert not thread.is_alive()
+
+    start = next(data for name, data in out["events"] if name == "start")
+    assert "memory" in start["context"]["sources"]
+
+
 def test_terminal_confirm_approved_runs_the_command(mock_client, session, tmp_path):
     import sys
 

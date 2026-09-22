@@ -3,6 +3,7 @@ import { Sidebar, type ViewId } from '@/components/Sidebar'
 import { api, ApiError, type Capability, type Provider } from '@/lib/api'
 import { useChatStore } from '@/store/chat'
 import { ChatView } from '@/views/ChatView'
+import { Memory } from '@/views/Memory'
 import { NotBuilt } from '@/views/NotBuilt'
 import { Onboarding } from '@/views/Onboarding'
 import { Settings, applyTheme } from '@/views/Settings'
@@ -149,6 +150,7 @@ export function App() {
           />
         )}
         {view === 'settings' && <Settings onProvidersChanged={() => void refreshProviders()} />}
+        {view === 'memory' && <Memory />}
         {viewCapability[view] && (
           <NotBuilt capability={capabilityFor(viewCapability[view]!)} label={view} />
         )}

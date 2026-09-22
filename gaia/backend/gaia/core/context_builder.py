@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from gaia.core.persona import build_system_prompt
-from gaia.db.models import Message
+from gaia.db.models import Memory, Message
 from gaia.llm.base import ChatMessage
 
 #: Rough characters-per-token used for budgeting. Deliberately conservative
@@ -42,6 +42,10 @@ class BuiltContext:
     estimated_input_tokens: int = 0
     #: Names of the context sources actually used, for the observability panel.
     sources: list[str] = field(default_factory=list)
+    #: `sequence` of the oldest message actually kept this turn; `None` if
+    #: nothing was dropped. Lets `summarization_service` know exactly which
+    #: messages are now at risk of falling out of context permanently.
+    oldest_kept_sequence: int | None = None
 
 
 def build_context(
@@ -51,6 +55,7 @@ def build_context(
     custom_instructions: str | None = None,
     conversation_system_prompt: str | None = None,
     summary: str | None = None,
+    memories: list[Memory] | None = None,
 ) -> BuiltContext:
     """Assemble the request payload for one turn.
 
@@ -67,6 +72,11 @@ def build_context(
         sources.append("custom_instructions")
     if conversation_system_prompt:
         sources.append("conversation_instructions")
+
+    if memories:
+        lines = "\n".join(f"- ({m.kind}) {m.content}" for m in memories)
+        system += f"\n## Things to remember about the user\n{lines}\n"
+        sources.append("memory")
 
     if summary and summary.strip():
         system += (
@@ -104,10 +114,12 @@ def build_context(
     while selected and selected[0].role != "user":
         selected.pop(0)
 
+    dropped_count = len(usable) - len(selected)
     return BuiltContext(
         system=system,
         messages=[ChatMessage(role=m.role, content=m.content) for m in selected],  # type: ignore[arg-type]
-        dropped_message_count=len(usable) - len(selected),
+        dropped_message_count=dropped_count,
         estimated_input_tokens=system_tokens + used,
         sources=sources,
+        oldest_kept_sequence=selected[0].sequence if selected and dropped_count > 0 else None,
     )
