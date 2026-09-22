@@ -97,9 +97,9 @@ export function ChatView({ providerReady, providerHint, onOpenSettings }: Props)
                 not in the cloud.
               </p>
               <p style={{ color: 'var(--text-faint)', fontSize: 13 }}>
-                Chat, tools (calculator, Python, filesystem, terminal), voice, memory and
-                projects are live. Documents and the rest of the roadmap aren't built yet, and
-                GAIA will say so rather than pretend.
+                Chat, tools (calculator, Python, filesystem, terminal), voice, memory, projects
+                and documents are live. The rest of the roadmap isn't built yet, and GAIA will
+                say so rather than pretend.
               </p>
             </div>
           </div>

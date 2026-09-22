@@ -149,6 +149,18 @@ export interface ProjectTask {
   updated_at: string
 }
 
+export interface Document {
+  id: string
+  title: string
+  source_path: string | null
+  media_type: string | null
+  byte_size: number | null
+  project_id: string | null
+  status: string
+  chunk_count: number
+  created_at: string
+}
+
 export interface PrivacyRow {
   label: string
   location: string
@@ -327,6 +339,18 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ content }),
     }),
+
+  listDocuments: (projectId?: string) =>
+    request<Document[]>(`/api/documents${projectId ? `?project_id=${projectId}` : ''}`),
+
+  uploadDocument: (file: File, projectId?: string) => {
+    const form = new FormData()
+    form.append('file', file)
+    if (projectId) form.append('project_id', projectId)
+    return request<Document>('/api/documents', { method: 'POST', body: form })
+  },
+
+  deleteDocument: (id: string) => request<void>(`/api/documents/${id}`, { method: 'DELETE' }),
 
   exportBackupUrl: () => `${apiBase()}/api/backup/export`,
 

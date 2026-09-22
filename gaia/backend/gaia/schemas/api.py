@@ -247,6 +247,20 @@ class ProjectMemoryCreate(BaseModel):
     importance: float = Field(default=0.5, ge=0.0, le=1.0)
 
 
+class DocumentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    title: str
+    source_path: str | None = None
+    media_type: str | None = None
+    byte_size: int | None = None
+    project_id: str | None = None
+    status: str
+    chunk_count: int = 0
+    created_at: datetime
+
+
 class TranscribeResponse(BaseModel):
     text: str
     language: str | None = None

@@ -41,6 +41,8 @@ def test_capabilities_are_reported_honestly(client):
     # Milestone 4: memory (first slice) and projects (second slice) both shipped.
     assert capabilities["memory"]["available"] is True
     assert capabilities["projects"]["available"] is True
+    # Milestone 5: document ingestion and BM25 retrieval shipped.
+    assert capabilities["knowledge"]["available"] is True
 
     # None of these ship yet; the API must not claim otherwise.
     for key in ("research", "simulation"):
@@ -77,6 +79,7 @@ def test_system_status_reports_a_built_capability_as_ok(client):
     assert names["Voice"] == "ok"
     assert names["Memory"] == "ok"
     assert names["Projects"] == "ok"
+    assert names["Documents"] == "ok"
 
 
 def test_privacy_dashboard_marks_cloud_inference(client):
@@ -121,6 +124,12 @@ def test_privacy_dashboard_reports_projects_as_shipped(client):
     assert rows["Projects"]["location"] == "LOCAL"
 
 
+def test_privacy_dashboard_reports_documents_as_shipped(client):
+    # Milestone 5: documents must not still be listed NOT BUILT.
+    rows = {row["label"]: row for row in client.get("/api/privacy").json()}
+    assert rows["Documents"]["location"] == "LOCAL"
+
+
 def test_privacy_dashboard_lists_logs_and_backups(client):
     # docs/PRIVACY.md documents both rows; the API had never actually listed them.
     rows = {row["label"]: row for row in client.get("/api/privacy").json()}
@@ -132,7 +141,6 @@ def test_privacy_dashboard_not_built_rows_cite_current_milestones(client):
     # These drifted out of sync with core/capabilities.py's renumbering once
     # before (Python execution) — pin the milestone numbers so it can't again.
     rows = {row["label"]: row for row in client.get("/api/privacy").json()}
-    assert "Milestone 5" in rows["Documents"]["detail"]
     assert "Milestone 7" in rows["Web search"]["detail"]
 
 

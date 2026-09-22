@@ -81,12 +81,19 @@ Shipped in two slices, the way Voice shipped ahead of Memory/Projects in Milesto
   project-aware context injects the project's name, description, goals and open tasks, merged
   with its project-scoped memory, into the system prompt.
 
-## Milestone 5 — Documents and retrieval
+## ✅ Milestone 5 — Documents and retrieval *(shipped)*
 
-PDF/TXT/Markdown/CSV/code ingestion · chunking · embeddings · retrieval into the context builder
-· citations that name the passage supporting each claim.
+PDF/TXT/Markdown/CSV/code ingestion · chunking · retrieval into the context builder · citations
+that name the passage supporting each claim.
 
 Acceptance: import a PDF, ask about it, get an answer that points at the specific passage.
+**Verified**, including that an unrelated question retrieves nothing and deleting the document
+stops it being found.
+
+Retrieval is lexical (BM25), not dense embeddings — no chat provider here has a uniformly
+available embeddings API, and coupling document search to whichever one happens to be configured
+would be a strange dependency. See `docs/ARCHITECTURE.md`, "Documents and retrieval," for the
+full reasoning; `DocumentChunk.embedding` stays unused for now.
 
 ## Milestone 6 — Tutor and study
 

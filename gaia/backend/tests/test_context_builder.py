@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from gaia.core.context_builder import build_context, estimate_tokens
-from gaia.db.models import Memory, Message, Project, ProjectTask
+from gaia.db.models import Document, DocumentChunk, Memory, Message, Project, ProjectTask
 
 
 def make_message(role: str, content: str, sequence: int, status: str = "complete") -> Message:
@@ -24,6 +24,12 @@ def make_project(name: str, **kwargs) -> Project:
 
 def make_task(title: str) -> ProjectTask:
     return ProjectTask(project_id="p", title=title)
+
+
+def make_chunk(document: Document, content: str, *, page: int | None = None) -> DocumentChunk:
+    chunk = DocumentChunk(content=content, chunk_index=0, page=page)
+    chunk.document = document
+    return chunk
 
 
 def test_includes_persona_and_history():
@@ -166,3 +172,33 @@ def test_project_with_no_description_or_tasks_still_shows_its_name():
     )
     assert "Cosmos Simulator" in context.system
     assert "project" in context.sources
+
+
+def test_retrieved_chunks_are_injected_with_a_citation_label():
+    document = Document(title="Game Theory 101")
+    chunk = make_chunk(document, "Cournot competition sets quantities.", page=42)
+    context = build_context(
+        history=[make_message("user", "hi", 1)],
+        context_window=200_000,
+        retrieved_chunks=[chunk],
+    )
+    assert "Cournot competition sets quantities." in context.system
+    assert "[Game Theory 101, p.42]" in context.system
+    assert "knowledge" in context.sources
+
+
+def test_retrieved_chunk_without_a_page_omits_it_from_the_label():
+    document = Document(title="notes")
+    chunk = make_chunk(document, "Some fact.", page=None)
+    context = build_context(
+        history=[make_message("user", "hi", 1)],
+        context_window=200_000,
+        retrieved_chunks=[chunk],
+    )
+    assert "[notes]" in context.system
+
+
+def test_no_retrieved_chunks_means_no_retrieval_section_or_source():
+    context = build_context(history=[make_message("user", "hi", 1)], context_window=200_000)
+    assert "## Retrieved passages" not in context.system
+    assert "knowledge" not in context.sources

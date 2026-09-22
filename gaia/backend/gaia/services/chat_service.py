@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 from gaia.core.context_builder import build_context
 from gaia.db.base import utcnow
 from gaia.db.models import Message, ProjectTask, TaskRun, ToolCall
+from gaia.documents import retrieval as document_retrieval
 from gaia.llm.base import ChatMessage, LLMProvider, ProviderError, ToolCallRequest
 from gaia.llm.registry import build_provider
 from gaia.services import (
@@ -249,6 +250,10 @@ async def stream_turn(session: Session, request: TurnRequest) -> AsyncIterator[s
             open_tasks = project_service.list_tasks(session, project.id, open_only=True)
             memories = memories + memory_service.project_memories(session, project.id)
 
+    retrieved_chunks = document_retrieval.search(
+        session, request.content, project_id=conversation.project_id
+    )
+
     context = build_context(
         history=history,
         context_window=context_window,
@@ -258,6 +263,7 @@ async def stream_turn(session: Session, request: TurnRequest) -> AsyncIterator[s
         memories=memories,
         project=project,
         project_tasks=open_tasks,
+        retrieved_chunks=retrieved_chunks,
     )
     if memories:
         memory_service.mark_used(session, [m.id for m in memories])

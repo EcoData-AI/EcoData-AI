@@ -55,9 +55,9 @@ Full list in `backend/.env.example`.
 ## Testing
 
 ```bash
-cd backend  && .venv/bin/python -m pytest        # 36 tests
+cd backend  && .venv/bin/python -m pytest        # backend tests
 cd backend  && .venv/bin/python -m ruff check gaia tests
-cd frontend && npm test                          # SSE parser
+cd frontend && npm test                          # SSE parser, voice, etc.
 cd frontend && npm run build                     # typecheck + build
 ```
 

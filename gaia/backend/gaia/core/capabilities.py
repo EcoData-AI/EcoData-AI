@@ -32,7 +32,9 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability("voice", "Voice", True, 3, "Speech-to-text and text-to-speech (first slice)."),
     Capability("memory", "Memory", True, 4, "Inspectable episodic and semantic memory."),
     Capability("projects", "Projects", True, 4, "Goals, tasks, notes and project context."),
-    Capability("knowledge", "Documents & RAG", False, 5, "PDF/CSV/Markdown ingestion, retrieval."),
+    Capability(
+        "knowledge", "Documents", True, 5, "PDF/TXT/Markdown/CSV/code ingestion, BM25 retrieval."
+    ),
     Capability("tutor", "Tutor mode", False, 6, "Socratic teaching with spaced repetition."),
     Capability("study", "Study", False, 6, "Subjects, courses, quizzes and progress."),
     Capability("research", "Research", False, 7, "Web search, source evaluation, citations."),

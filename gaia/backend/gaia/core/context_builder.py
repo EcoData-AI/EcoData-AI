@@ -1,10 +1,8 @@
 """Context Builder — decides what actually gets sent to the model.
 
 The rule from the product spec is: never send the whole database to the LLM,
-so the job is budgeting the conversation, memories and project context against
-the model's context window. Retrieved documents plug into `build_context` once
-Milestone 5 lands; the return shape is designed so that addition does not
-change the caller, the same way memory and project context did not.
+so the job is budgeting the conversation, memories, project context and
+retrieved document passages against the model's context window.
 """
 
 from __future__ import annotations
@@ -12,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from gaia.core.persona import build_system_prompt
-from gaia.db.models import Memory, Message, Project, ProjectTask
+from gaia.db.models import DocumentChunk, Memory, Message, Project, ProjectTask
 from gaia.llm.base import ChatMessage
 
 #: Rough characters-per-token used for budgeting. Deliberately conservative
@@ -30,6 +28,11 @@ FALLBACK_CONTEXT_WINDOW = 32_000
 
 def estimate_tokens(text: str) -> int:
     return max(1, int(len(text) / CHARS_PER_TOKEN))
+
+
+def _citation_label(chunk: DocumentChunk) -> str:
+    title = chunk.document.title
+    return f"{title}, p.{chunk.page}" if chunk.page is not None else title
 
 
 @dataclass(slots=True)
@@ -57,6 +60,7 @@ def build_context(
     memories: list[Memory] | None = None,
     project: Project | None = None,
     project_tasks: list[ProjectTask] | None = None,
+    retrieved_chunks: list[DocumentChunk] | None = None,
 ) -> BuiltContext:
     """Assemble the request payload for one turn.
 
@@ -85,6 +89,18 @@ def build_context(
             parts.append(f"Open tasks:\n{task_lines}")
         system += "\n## Current project\n" + "\n".join(parts) + "\n"
         sources.append("project")
+
+    if retrieved_chunks:
+        passages = "\n\n".join(f"[{_citation_label(c)}]\n{c.content}" for c in retrieved_chunks)
+        system += (
+            "\n## Retrieved passages\n"
+            "The following passages were retrieved from the user's own documents because they "
+            "matched this turn's message. When you use one, cite it in your reply using its "
+            "exact label in brackets, e.g. [Title, p.3]. Do not cite a passage you did not "
+            "actually use, and do not invent a citation for something not shown here.\n\n"
+            f"{passages}\n"
+        )
+        sources.append("knowledge")
 
     if memories:
         lines = "\n".join(f"- ({m.kind}) {m.content}" for m in memories)

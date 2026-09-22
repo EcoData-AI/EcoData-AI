@@ -3,6 +3,7 @@ import { Sidebar, type ViewId } from '@/components/Sidebar'
 import { api, ApiError, type Capability, type Provider } from '@/lib/api'
 import { useChatStore } from '@/store/chat'
 import { ChatView } from '@/views/ChatView'
+import { Knowledge } from '@/views/Knowledge'
 import { Memory } from '@/views/Memory'
 import { NotBuilt } from '@/views/NotBuilt'
 import { Onboarding } from '@/views/Onboarding'
@@ -118,7 +119,6 @@ export function App() {
   const viewCapability: Partial<Record<ViewId, string>> = {
     study: 'study',
     research: 'research',
-    knowledge: 'knowledge',
     simulation: 'simulation',
     experiments: 'experiments',
   }
@@ -152,6 +152,7 @@ export function App() {
         {view === 'settings' && <Settings onProvidersChanged={() => void refreshProviders()} />}
         {view === 'memory' && <Memory />}
         {view === 'projects' && <Projects />}
+        {view === 'knowledge' && <Knowledge />}
         {viewCapability[view] && (
           <NotBuilt capability={capabilityFor(viewCapability[view]!)} label={view} />
         )}

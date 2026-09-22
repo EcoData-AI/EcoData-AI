@@ -1,6 +1,6 @@
 # Architecture
 
-GAIA Beta v0.1 — Milestones 1–4.
+GAIA Beta v0.1 — Milestones 1–5.
 
 ## Stack
 
@@ -61,13 +61,16 @@ desktop assumption, and the reason it must never be exposed on a routable interf
 
 ```
 gaia/
-├── config.py          settings + on-disk layout; the only place paths are defined
-├── db/                Base, models, session, migrations
-├── llm/               provider abstraction (base, registry, catalog, 4 providers)
-├── core/              persona, context_builder, secrets, capabilities, logging_setup
-├── services/          conversation, settings, chat (orchestration)
-├── api/               FastAPI routers — HTTP shape only, no business logic
-└── schemas/           Pydantic request/response models
+├── config.py     settings + on-disk layout; the only place paths are defined
+├── db/           Base, models, session, migrations
+├── llm/          provider abstraction (base, registry, catalog, 4 providers)
+├── tools/        calculator, python_sandbox, filesystem, terminal, memory (remember)
+├── voice/        STTProvider/TTSProvider abstraction (faster-whisper, pyttsx3)
+├── documents/    extraction, chunking, BM25 retrieval
+├── core/         persona, context_builder, secrets, capabilities, logging_setup
+├── services/     conversation, settings, chat, memory, project, document (orchestration)
+├── api/          FastAPI routers — HTTP shape only, no business logic
+└── schemas/      Pydantic request/response models
 ```
 
 Dependencies point one way: `api → services → core/llm → db`. A router never touches a provider
@@ -406,6 +409,54 @@ description, goals, and open task *titles* — not notes, to stay compact), appe
 excludes `kind="project"` — otherwise every project's memory would leak into every conversation
 regardless of assignment, not just the ones actually working on that project.
 
+## Documents and retrieval
+
+Milestone 5. `gaia/documents/` mirrors `gaia/tools/`'s per-concern layout: `extractors.py` (text
+out of a file), `chunking.py` (text into passages), `retrieval.py` (BM25 search over passages).
+`gaia/services/document_service.py` orchestrates ingestion; `gaia/api/documents.py` is the HTTP
+surface — upload, list, delete, nothing else. There is no "search" endpoint: retrieval happens
+automatically, once per chat turn, not as a user- or model-initiated query.
+
+**Why BM25 (lexical) rather than dense embeddings.** No chat provider here has a uniformly
+available embeddings API — Anthropic has none at all, and using Ollama's or an OpenAI-compatible
+endpoint's embeddings would tie document search to whichever provider happens to be configured
+for chat, an odd coupling for a feature that has nothing to do with which model answers. BM25 is
+computed fresh on every query directly against `DocumentChunk` rows already in SQLite — no
+persisted vector index, no embedding model to download or run, fully local regardless of
+provider. Fine at the scale one person's own documents reach; `DocumentChunk.embedding` (schema
+already existed) stays unused, the same way `Memory` shipped without real retrieval — see "Known
+limits" below for where this would need to change.
+
+**Ingestion never leaves a half-built `Document` row.** `document_service.ingest_file` extracts
+text and builds every chunk in memory first; only once that fully succeeds does it write the
+`Document` row (`status="ready"`) and its `DocumentChunk` rows in the same transaction. A file
+whose format isn't recognised (`extractors.UnsupportedFormatError`) or that extracts to no usable
+text at all (`ValueError`) never gets a row — `api/documents.py` surfaces both as a 400, and
+cleans up the uploaded copy from `config.documents_dir` it had already written before validation
+finished. PDF text comes from `pypdf`, per-page (so `DocumentChunk.page` stays meaningful for
+citations); everything else (TXT, Markdown, CSV, and an allow-list of code extensions) is read as
+plain UTF-8 — CSV is not parsed into rows, just chunked as text like anything else this slice.
+
+**Retrieval runs unconditionally, like the memory/project lookups already do, but only ever
+contributes when it actually matches.** `chat_service.stream_turn` calls
+`documents.retrieval.search(session, request.content, project_id=conversation.project_id)`
+before `build_context` on *every* turn — an empty corpus or a non-matching question costs one
+cheap in-process BM25 pass and adds nothing to the prompt, the same "expensive to check, free to
+skip" shape `document_retrieval` shares with `relevant_memories()`. `search()` never returns a
+zero-score chunk: a query that matches nothing gets `[]`, never a low-relevance passage dressed
+up as a citation. Results are scoped to the conversation's project when one is assigned, else
+every ready document.
+
+**Context injection and citations.** `context_builder.build_context` gained `retrieved_chunks`:
+when non-empty, a `## Retrieved passages` section lists each chunk labelled `[Document Title,
+p.N]` (or without the page for non-paginated formats), with an instruction to cite that exact
+label when the model uses one — and not to invent a citation for anything not shown.
+`sources.append("knowledge")`, reusing the capability key `core/capabilities.py` already defines
+rather than inventing a new source name. This is prompting, not enforcement — like the
+`remember` tool's "only when the user asks" instruction, the persona text is the only mechanism
+making citations happen; there is no server-side check that a cited label actually appears in the
+assistant's reply.
+
 ## Context builder
 
 `core/context_builder.py` decides what is actually sent. It assembles the persona, the user's
@@ -425,11 +476,12 @@ The full schema from the brief exists up front so migrations stay linear as mile
 
 | Live | Schema only (no API surface) |
 |---|---|
-| `conversations`, `messages` | `documents`, `document_chunks` |
-| `settings`, `task_runs` | `experiments`, `simulation_runs` |
-| `tool_calls` (audit — live from Milestone 2) | `study_plans`, `learning_progress` |
-| `workspace_roots` (live from Milestone 2) | `permissions` |
+| `conversations`, `messages` | `experiments`, `simulation_runs` |
+| `settings`, `task_runs` | `study_plans`, `learning_progress` |
+| `tool_calls` (audit — live from Milestone 2) | `permissions` |
+| `workspace_roots` (live from Milestone 2) | |
 | `memories`, `projects`, `project_tasks` (live from Milestone 4) | |
+| `documents`, `document_chunks` (live from Milestone 5) | |
 
 `messages.sequence` is a monotonic per-conversation integer with a uniqueness constraint —
 timestamps collide under streaming, so ordering cannot depend on them. Alembic runs
@@ -452,9 +504,15 @@ The brief's §3 and §53 are enforced structurally rather than by remembering:
 
 - **Memory has no retrieval — it's a capped, unconditional list.** `relevant_memories()` and
   `project_memories()` both return every enabled memory in scope (up to 20), ranked by importance
-  and recency; there is no embedding search to pick the ones actually relevant to the current
-  turn. Fine at the scale one person's (or one project's) opt-in memories reach; would need real
-  retrieval well before Milestone 5's document RAG work reuses the same idea at larger scale.
+  and recency; there is no query-relevance ranking at all. Fine at the scale one person's (or one
+  project's) opt-in memories reach.
+- **Document retrieval is lexical (BM25), not semantic, and recomputed per query.** A document
+  can fail to surface for a question about its own content just because the wording differs — no
+  synonym or paraphrase matching, only shared terms. There is also no persisted index: every
+  query re-tokenises and re-scores every candidate chunk from scratch, fine at one person's
+  document-collection scale but not something that would hold up at real document-store size.
+  Scanned PDFs with no extractable text layer (`pypdf` returns nothing to OCR) are silently
+  skipped page by page rather than ingested as blank chunks.
 - **A project's own conversations aren't listed or filterable anywhere.** The topbar picker
   assigns a conversation to a project, but there is no "show me every conversation in this
   project" view yet — the sidebar's conversation list is not project-aware.

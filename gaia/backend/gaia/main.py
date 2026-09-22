@@ -12,7 +12,17 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from gaia import APP_TAGLINE, __version__
-from gaia.api import chat, conversations, memory, projects, providers, system, voice, workspace
+from gaia.api import (
+    chat,
+    conversations,
+    documents,
+    memory,
+    projects,
+    providers,
+    system,
+    voice,
+    workspace,
+)
 from gaia.config import get_settings
 from gaia.core.logging_setup import configure_logging
 from gaia.db.migrations import upgrade_database
@@ -60,6 +70,7 @@ def create_app() -> FastAPI:
     app.include_router(voice.router)
     app.include_router(memory.router)
     app.include_router(projects.router)
+    app.include_router(documents.router)
 
     @app.exception_handler(Exception)
     async def unhandled_exception(request: Request, exc: Exception) -> JSONResponse:

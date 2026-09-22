@@ -167,8 +167,11 @@ def privacy(session: Session = Depends(get_session)) -> list[PrivacyRow]:
         ),
         PrivacyRow(
             label="Documents",
-            location="NOT BUILT",
-            detail="Planned for Milestone 5. Will be local.",
+            location="LOCAL",
+            detail=(
+                "The file and its extracted text stay in your data directory and the local "
+                "database. Retrieval is lexical (BM25) — nothing is sent anywhere to search it."
+            ),
         ),
         PrivacyRow(
             label="Python execution",

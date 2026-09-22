@@ -28,6 +28,9 @@ dependencies = [
     # See docs/ARCHITECTURE.md, "Voice" section, for why these two specifically.
     "faster-whisper>=1.0",
     "pyttsx3>=2.90",
+    # Documents (Milestone 5): PDF text extraction only. Retrieval is lexical
+    # (BM25, pure Python, gaia/documents/retrieval.py) — no embedding library.
+    "pypdf>=4.0",
 ]
 
 [project.optional-dependencies]

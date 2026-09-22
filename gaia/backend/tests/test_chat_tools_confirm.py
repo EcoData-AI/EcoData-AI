@@ -320,6 +320,57 @@ def test_unassigning_a_project_stops_its_context_from_being_injected(mock_client
     assert "project" not in start["context"]["sources"]
 
 
+def test_retrieved_document_passages_are_injected_when_the_turn_matches(mock_client):
+    import io
+
+    upload = mock_client.post(
+        "/api/documents",
+        files={
+            "file": (
+                "notes.txt",
+                io.BytesIO(b"Zorblax quantum widgets require calibration before use."),
+                "text/plain",
+            )
+        },
+    )
+    assert upload.status_code == 201
+
+    conversation_id = mock_client.post("/api/conversations", json={}).json()["id"]
+    out: dict = {}
+    thread = _run_turn_in_background(
+        mock_client, conversation_id, "tell me about Zorblax quantum widgets", out
+    )
+    thread.join(timeout=30)
+    assert not thread.is_alive()
+
+    start = next(data for name, data in out["events"] if name == "start")
+    assert "knowledge" in start["context"]["sources"]
+
+
+def test_unrelated_turn_does_not_trigger_retrieval(mock_client):
+    import io
+
+    mock_client.post(
+        "/api/documents",
+        files={
+            "file": (
+                "notes.txt",
+                io.BytesIO(b"Zorblax quantum widgets require calibration before use."),
+                "text/plain",
+            )
+        },
+    )
+
+    conversation_id = mock_client.post("/api/conversations", json={}).json()["id"]
+    out: dict = {}
+    thread = _run_turn_in_background(mock_client, conversation_id, "hello there", out)
+    thread.join(timeout=30)
+    assert not thread.is_alive()
+
+    start = next(data for name, data in out["events"] if name == "start")
+    assert "knowledge" not in start["context"]["sources"]
+
+
 def test_terminal_confirm_approved_runs_the_command(mock_client, session, tmp_path):
     import sys
 

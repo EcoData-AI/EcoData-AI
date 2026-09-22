@@ -20,18 +20,22 @@ from the running configuration rather than written by hand.
 | Voice (microphone, synthesized speech) | **LOCAL** | See "Voice" below — nothing is sent anywhere, nothing is kept |
 | Memory | **LOCAL** | Stored only when you ask GAIA to remember something, and only after you approve it |
 | Projects (goals, tasks, project memory) | **LOCAL** | Same database; goals/tasks are yours, project memory follows the same opt-in rule as Memory |
+| Documents | **LOCAL** | The file and its extracted text stay in your data directory; retrieval is lexical (BM25), nothing is sent anywhere to search it |
 | Telemetry / analytics | **none** | GAIA collects nothing and phones home to nobody |
-| Documents, web search | **not built** | Milestones 5, 7 respectively |
+| Web search | **not built** | Milestone 7 |
 
 ## What leaves your machine
 
 Exactly one thing, and only if you configure a cloud provider: **the text of a chat turn**. That
-means the system prompt, your custom instructions, and the portion of the conversation history
-that fits the context budget — sent to Anthropic or your configured OpenAI-compatible endpoint
-so it can generate a reply.
+means the system prompt, your custom instructions, the portion of the conversation history that
+fits the context budget, and whatever `context_builder` assembled for that turn — project
+context, remembered facts, and any document passages BM25 retrieved. If a tool call happened
+(reading a file, running Python, a terminal command), its result is fed back to the model within
+the same turn and is sent the same way. All of this only ever goes to the provider you configured
+for that turn; nothing is sent anywhere else.
 
-Nothing else is transmitted. No file contents (GAIA cannot read files yet), no analytics, no
-crash reports, no usage statistics, no conversation titles, no metadata.
+Nothing beyond that is transmitted: no analytics, no crash reports, no usage statistics, no
+conversation titles, no metadata.
 
 **Choose the Ollama provider and nothing leaves at all** — inference runs on your own hardware.
 The privacy dashboard shows `LLM inference — LOCAL` when that is the case, and `CLOUD` when it
@@ -78,6 +82,8 @@ like a secret as a backstop; no code path passes a key to a logger in the first 
   it stops influencing replies on your very next turn.
 - **A project** — delete it on the Projects screen. Its tasks and project memory are deleted with
   it; conversations that were assigned to it are kept, just unassigned.
+- **A document** — delete it on the Knowledge screen. Removes the stored file and every chunk of
+  its extracted text; it immediately stops being found by retrieval.
 - **Everything** — quit GAIA and delete the data directory. Nothing survives elsewhere.
 - **An API key** — Settings → AI & Models → Remove key. This clears the keyring entry and the
   file fallback.
@@ -104,9 +110,6 @@ microphone button. There is no wake word and no always-on recording in this vers
 
 ## Features that are not built yet
 
-Document ingestion and web search do not exist yet. They are listed in the dashboard as
-`NOT BUILT` rather than omitted, so the list stays a complete account of GAIA's data surface as
-features land. When they arrive:
-
-- Documents will be **local**.
-- Web search will be **external**, and will be labelled as such at the point of use.
+Web search does not exist yet. It is listed in the dashboard as `NOT BUILT` rather than omitted,
+so the list stays a complete account of GAIA's data surface as features land. When it arrives it
+will be **external**, and will be labelled as such at the point of use.

@@ -213,6 +213,10 @@ class Document(UUIDMixin, TimestampMixin, Base):
     )
     status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
 
+    chunks: Mapped[list[DocumentChunk]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
+
 
 class DocumentChunk(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "document_chunks"
@@ -225,6 +229,11 @@ class DocumentChunk(UUIDMixin, TimestampMixin, Base):
     token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     embedding: Mapped[list[float] | None] = mapped_column(JSON, nullable=True)
     page: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Used by `documents/retrieval.py` and `context_builder` to label a
+    # retrieved passage with its source document's title — lazy-loaded is
+    # fine at the scale a BM25 result set (a handful of chunks) reaches.
+    document: Mapped[Document] = relationship(back_populates="chunks")
 
 
 class Experiment(UUIDMixin, TimestampMixin, Base):

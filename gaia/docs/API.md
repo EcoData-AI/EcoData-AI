@@ -200,6 +200,54 @@ Both are swappable per `voice.stt_provider`/`voice.tts_provider` settings
 
 ---
 
+## Memory
+
+Creation only ever happens through the model-invoked `remember` tool (`CONFIRM`-risk — see
+`docs/ARCHITECTURE.md`, "Memory") or, for a project-scoped memory, `POST /api/projects/{id}/
+memories` below. This surface is the inspectable side: search, edit, disable, delete.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/memory` | Query params: `q` (substring on content), `kind`, `enabled_only` |
+| `PATCH` | `/api/memory/{id}` | `{content?, importance?, enabled?}` |
+| `DELETE` | `/api/memory/{id}` | `204`; `404` if unknown |
+
+---
+
+## Projects
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` / `POST` | `/api/projects` | `POST`: `{name, description?, goals?, workspace_path?}` |
+| `GET` / `PATCH` / `DELETE` | `/api/projects/{id}` | Deleting cascades its tasks and project memory; conversations assigned to it are unassigned, not deleted |
+| `GET` / `POST` | `/api/projects/{id}/tasks` | `POST`: `{title, notes?, status?}` |
+| `PATCH` / `DELETE` | `/api/projects/{id}/tasks/{task_id}` | |
+| `GET` / `POST` | `/api/projects/{id}/memories` | The one place memory creation happens outside the `remember` tool — see "Memory" above. `POST`: `{content, importance?}` |
+
+A conversation is assigned to a project via `PATCH /api/conversations/{id}` with
+`{"project_id": "..."}`; an explicit `{"project_id": null}` unassigns it.
+
+---
+
+## Documents
+
+Upload triggers ingestion synchronously — extraction, chunking, and persistence all happen
+within the request; the response only returns once the document is `"ready"` (or the upload is
+rejected). There is no separate search endpoint: retrieval runs automatically once per chat turn
+(see `docs/ARCHITECTURE.md`, "Documents and retrieval").
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/documents` | Query param: `project_id` |
+| `POST` | `/api/documents` | Multipart `file`, optional form field `project_id`. `400` for an unsupported extension, a file over 20 MB, or one with no extractable text — nothing is written to disk in any of those cases |
+| `GET` / `DELETE` | `/api/documents/{id}` | `DELETE` also removes the stored file |
+
+Supported formats: PDF, TXT, Markdown, CSV, and a small allow-list of code extensions (`.py`,
+`.js`, `.ts`, `.json`, `.yaml`, `.toml`, and similar) — see `gaia/documents/extractors.py`'s
+`SUPPORTED_EXTENSIONS` for the exact list.
+
+---
+
 ## Backups
 
 | Method | Path | Notes |
@@ -213,8 +261,7 @@ Backups contain conversations and settings. They do **not** contain API keys.
 
 ## Endpoints that do not exist yet
 
-`/api/memory`, `/api/projects`, `/api/research`, `/api/simulations`, `/api/study` are named in
-the roadmap but **are not implemented**. They return `404`. Check `/api/capabilities` rather than
-assuming. The tool-call loop itself is live (`/api/chat` and `/api/chat/tool-confirmations/{id}`,
-above), with all five tools from Milestone 2's original scope registered: calculator,
-python_sandbox, filesystem_read, filesystem_write, terminal.
+`/api/research`, `/api/simulations`, `/api/study` are named in the roadmap but **are not
+implemented**. They return `404`. Check `/api/capabilities` rather than assuming. The tool-call
+loop itself is live (`/api/chat` and `/api/chat/tool-confirmations/{id}`, above), with six tools
+registered: calculator, python_sandbox, filesystem_read, filesystem_write, terminal, remember.
