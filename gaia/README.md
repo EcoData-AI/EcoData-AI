@@ -6,10 +6,10 @@ GAIA is software: a program that runs language models and tools on your behalf. 
 conscious and does not pretend to be. Your conversations, settings and data stay on your
 machine; you choose which model provider — cloud or fully local — answers your questions.
 
-> **Status: Beta v0.1 — Milestones 1–3, plus Memory (Milestone 4, first slice).**
+> **Status: Beta v0.1 — Milestones 1–4 shipped.**
 > Chat, conversation history, model providers, tools (calculator, Python, filesystem, terminal),
-> voice (first slice) and memory work. Projects, documents, research, tutoring and simulation are
-> **not built yet**. GAIA says so plainly in the interface and in conversation rather than
+> voice (first slice), memory and projects all work. Documents, research, tutoring and simulation
+> are **not built yet**. GAIA says so plainly in the interface and in conversation rather than
 > pretending otherwise. See [ROADMAP.md](docs/ROADMAP.md).
 
 ---
@@ -28,7 +28,7 @@ machine; you choose which model provider — cloud or fully local — answers yo
 | Tools · Python sandbox · filesystem · terminal, with SAFE/CONFIRM/BLOCKED gating and an audit trail | ✅ |
 | Voice — push-to-talk STT/TTS, fully local | ✅ |
 | Memory — opt-in, CONFIRM-gated `remember` tool, an inspectable Memory screen | ✅ |
-| Projects — goals, tasks, notes, project-aware context | ⛔ Milestone 4 |
+| Projects — goals, tasks, project-scoped memory, project-aware context | ✅ |
 | Documents & RAG | ⛔ Milestone 5 |
 | Tutor · Study | ⛔ Milestone 6 |
 | Research | ⛔ Milestone 7 |
@@ -112,7 +112,7 @@ GAIA/
 ├── sandbox/      workspace-scoped filesystem and Python sandbox roots
 ├── memory/       reserved for later (memory itself lives in database/, below)
 ├── documents/    (Milestone 5)
-├── projects/     (Milestone 4)
+├── projects/     reserved for later (project data itself lives in database/, below)
 └── experiments/  (Milestone 9)
 ```
 

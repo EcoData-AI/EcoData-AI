@@ -56,7 +56,7 @@ Acceptance: hold the mic, ask a question, hear the answer spoken back. **Verifie
 Later, once voice quality matters more than "does the pipeline work at all": barge-in,
 end-of-speech detection, streaming, and a neural TTS voice (Piper) in place of the OS's own.
 
-## Milestone 4 — Memory and projects
+## ✅ Milestone 4 — Memory and projects *(shipped)*
 
 Working / episodic / semantic / project memory · an inspectable Memory screen with search, edit,
 delete and disable · opt-in capture, never automatic · conversation summarisation feeding the
@@ -64,18 +64,22 @@ context builder · projects with goals, tasks, notes and their own memory · pro
 context.
 
 Acceptance: "remember that I prefer formal notation", see it in the Memory screen, delete it,
-and watch it stop influencing replies. **Verified** for the memory half below; projects remains
-open.
+and watch it stop influencing replies. **Verified**, plus a second acceptance for the projects
+half: create a project with goals and a task, assign a conversation to it, see GAIA's replies
+informed by the project's goals and open tasks, unassign it, and watch that influence stop.
+**Verified.**
 
-**✅ Memory, first slice** *(shipped)* — semantic and episodic memory via an opt-in, CONFIRM-gated
-`remember` tool; the Memory screen (search, edit, disable, delete); conversation summarisation
-feeding the context builder, closing the gap `docs/ARCHITECTURE.md`'s "Known limits" flagged.
-Shipped as its own slice the way Voice shipped ahead of Memory/Projects in Milestone 3 — Projects
-needed more design (goals/tasks UI, project-aware context, project-scoped memory) and depended on
-nothing memory itself needed to ship.
+Shipped in two slices, the way Voice shipped ahead of Memory/Projects in Milestone 3:
 
-**⛔ Projects** — still pending: goals, tasks, notes, a Projects screen, project-scoped memory
-(the `project` memory `kind`), and project-aware context via `Conversation.project_id`.
+- **Memory, first slice** — semantic and episodic memory via an opt-in, CONFIRM-gated `remember`
+  tool; the Memory screen (search, edit, disable, delete); conversation summarisation feeding the
+  context builder, closing the gap `docs/ARCHITECTURE.md`'s "Known limits" flagged.
+- **Projects, second slice** — `project_service` CRUD for projects and tasks; project-scoped
+  memory (the `project` memory `kind`, created manually from the Project page rather than by the
+  `remember` tool, which has no notion of "the current project"); a conversation can be assigned
+  to a project (`Conversation.project_id`, with explicit unassignment via `project_id: null`);
+  project-aware context injects the project's name, description, goals and open tasks, merged
+  with its project-scoped memory, into the system prompt.
 
 ## Milestone 5 — Documents and retrieval
 

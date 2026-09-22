@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from gaia.core.context_builder import build_context, estimate_tokens
-from gaia.db.models import Memory, Message
+from gaia.db.models import Memory, Message, Project, ProjectTask
 
 
 def make_message(role: str, content: str, sequence: int, status: str = "complete") -> Message:
@@ -16,6 +16,14 @@ def make_message(role: str, content: str, sequence: int, status: str = "complete
 
 def make_memory(kind: str, content: str) -> Memory:
     return Memory(kind=kind, content=content)
+
+
+def make_project(name: str, **kwargs) -> Project:
+    return Project(name=name, **kwargs)
+
+
+def make_task(title: str) -> ProjectTask:
+    return ProjectTask(project_id="p", title=title)
 
 
 def test_includes_persona_and_history():
@@ -123,3 +131,38 @@ def test_oldest_kept_sequence_marks_the_boundary_when_messages_are_dropped():
     # — here, the tail of `history` of length `len(context.messages)`.
     expected_first_kept = history[len(history) - len(context.messages)]
     assert context.oldest_kept_sequence == expected_first_kept.sequence
+
+
+def test_project_is_injected_into_the_system_prompt():
+    project = make_project("Cosmos Simulator", description="A physics sandbox", goals="N-body")
+    context = build_context(
+        history=[make_message("user", "hi", 1)],
+        context_window=200_000,
+        project=project,
+        project_tasks=[make_task("design API"), make_task("scaffold repo")],
+    )
+    assert "Cosmos Simulator" in context.system
+    assert "A physics sandbox" in context.system
+    assert "N-body" in context.system
+    assert "design API" in context.system
+    assert "scaffold repo" in context.system
+    assert "project" in context.sources
+
+
+def test_no_project_means_no_project_section_or_source():
+    context = build_context(history=[make_message("user", "hi", 1)], context_window=200_000)
+    # `## Current project` (the injected section header), not the bare phrase —
+    # the persona's own base prompt mentions "Current project" descriptively
+    # (quoted, no `##`) regardless of whether one is actually assigned.
+    assert "## Current project" not in context.system
+    assert "project" not in context.sources
+
+
+def test_project_with_no_description_or_tasks_still_shows_its_name():
+    context = build_context(
+        history=[make_message("user", "hi", 1)],
+        context_window=200_000,
+        project=make_project("Cosmos Simulator"),
+    )
+    assert "Cosmos Simulator" in context.system
+    assert "project" in context.sources

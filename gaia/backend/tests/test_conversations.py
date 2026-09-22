@@ -64,3 +64,27 @@ def test_missing_conversation_returns_404(client):
     assert client.get("/api/conversations/does-not-exist").status_code == 404
     assert client.patch("/api/conversations/nope", json={"title": "x"}).status_code == 404
     assert client.delete("/api/conversations/nope").status_code == 404
+
+
+def test_create_conversation_with_a_project(client):
+    project_id = client.post("/api/projects", json={"name": "Cosmos Simulator"}).json()["id"]
+    created = client.post("/api/conversations", json={"project_id": project_id})
+    assert created.json()["project_id"] == project_id
+
+
+def test_assign_and_unassign_project(client):
+    project_id = client.post("/api/projects", json={"name": "Cosmos Simulator"}).json()["id"]
+    conversation_id = client.post("/api/conversations", json={}).json()["id"]
+
+    assigned = client.patch(
+        f"/api/conversations/{conversation_id}", json={"project_id": project_id}
+    )
+    assert assigned.json()["project_id"] == project_id
+
+    # An explicit null must actually clear it — the generic update path skips
+    # None values by design, which is exactly what `api/conversations.py`
+    # special-cases for this one field.
+    unassigned = client.patch(
+        f"/api/conversations/{conversation_id}", json={"project_id": None}
+    )
+    assert unassigned.json()["project_id"] is None

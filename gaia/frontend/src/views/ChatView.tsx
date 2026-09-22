@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Composer } from '@/components/Composer'
 import { MessageList } from '@/components/MessageList'
+import { api, type Project } from '@/lib/api'
 import { useChatStore } from '@/store/chat'
 
 interface Props {
@@ -25,7 +26,13 @@ export function ChatView({ providerReady, providerHint, onOpenSettings }: Props)
     dismissTurnError,
     newConversation,
     resolveToolConfirmation,
+    setProject,
   } = useChatStore()
+
+  const [projects, setProjects] = useState<Project[]>([])
+  useEffect(() => {
+    void api.listProjects().then(setProjects)
+  }, [])
 
   const active = conversations.find((c) => c.id === activeId)
 
@@ -48,6 +55,22 @@ export function ChatView({ providerReady, providerHint, onOpenSettings }: Props)
       <header className="topbar">
         <div className="topbar__title">{active?.title ?? 'GAIA'}</div>
         <div className="topbar__meta">
+          {active && (
+            <select
+              className="select"
+              aria-label="Project"
+              value={active.project_id ?? ''}
+              onChange={(event) => void setProject(active.id, event.target.value || null)}
+              style={{ fontSize: 12 }}
+            >
+              <option value="">No project</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          )}
           {lastTurnStats?.model_id && <span>{lastTurnStats.model_id}</span>}
           {sending && <span>streaming…</span>}
         </div>
@@ -74,9 +97,9 @@ export function ChatView({ providerReady, providerHint, onOpenSettings }: Props)
                 not in the cloud.
               </p>
               <p style={{ color: 'var(--text-faint)', fontSize: 13 }}>
-                Chat, tools (calculator, Python, filesystem, terminal) and voice are live.
-                Memory, documents and the rest of the roadmap aren't built yet, and GAIA will say
-                so rather than pretend.
+                Chat, tools (calculator, Python, filesystem, terminal), voice, memory and
+                projects are live. Documents and the rest of the roadmap aren't built yet, and
+                GAIA will say so rather than pretend.
               </p>
             </div>
           </div>

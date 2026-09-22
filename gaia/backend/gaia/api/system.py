@@ -158,6 +158,14 @@ def privacy(session: Session = Depends(get_session)) -> list[PrivacyRow]:
             ),
         ),
         PrivacyRow(
+            label="Projects",
+            location="LOCAL",
+            detail=(
+                "Goals, tasks and project-scoped memory, in the same local database. Deleting a "
+                "project deletes its tasks and memory; conversations are just unassigned."
+            ),
+        ),
+        PrivacyRow(
             label="Documents",
             location="NOT BUILT",
             detail="Planned for Milestone 5. Will be local.",

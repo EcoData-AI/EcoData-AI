@@ -6,6 +6,7 @@ import { ChatView } from '@/views/ChatView'
 import { Memory } from '@/views/Memory'
 import { NotBuilt } from '@/views/NotBuilt'
 import { Onboarding } from '@/views/Onboarding'
+import { Projects } from '@/views/Projects'
 import { Settings, applyTheme } from '@/views/Settings'
 
 type Boot =
@@ -116,7 +117,6 @@ export function App() {
   const capabilityFor = (key: string) => capabilities.find((c) => c.key === key)
   const viewCapability: Partial<Record<ViewId, string>> = {
     study: 'study',
-    projects: 'projects',
     research: 'research',
     knowledge: 'knowledge',
     simulation: 'simulation',
@@ -151,6 +151,7 @@ export function App() {
         )}
         {view === 'settings' && <Settings onProvidersChanged={() => void refreshProviders()} />}
         {view === 'memory' && <Memory />}
+        {view === 'projects' && <Projects />}
         {viewCapability[view] && (
           <NotBuilt capability={capabilityFor(viewCapability[view]!)} label={view} />
         )}

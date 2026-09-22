@@ -279,6 +279,47 @@ def test_remembered_memory_is_injected_into_a_later_turns_context(mock_client, s
     assert "memory" in start["context"]["sources"]
 
 
+def test_project_context_and_memory_are_injected_when_a_conversation_is_assigned(
+    mock_client, session
+):
+    from gaia.services import memory_service, project_service
+
+    project = project_service.create_project(session, name="Cosmos Simulator", goals="N-body")
+    memory_service.create_memory(
+        session, kind="project", content="uses SI units", project_id=project.id
+    )
+
+    conversation_id = mock_client.post(
+        "/api/conversations", json={"project_id": project.id}
+    ).json()["id"]
+    out: dict = {}
+    thread = _run_turn_in_background(mock_client, conversation_id, "hello", out)
+    thread.join(timeout=30)
+    assert not thread.is_alive()
+
+    start = next(data for name, data in out["events"] if name == "start")
+    assert "project" in start["context"]["sources"]
+    assert "memory" in start["context"]["sources"]
+
+
+def test_unassigning_a_project_stops_its_context_from_being_injected(mock_client, session):
+    from gaia.services import project_service
+
+    project = project_service.create_project(session, name="Cosmos Simulator")
+    conversation_id = mock_client.post(
+        "/api/conversations", json={"project_id": project.id}
+    ).json()["id"]
+    mock_client.patch(f"/api/conversations/{conversation_id}", json={"project_id": None})
+
+    out: dict = {}
+    thread = _run_turn_in_background(mock_client, conversation_id, "hello", out)
+    thread.join(timeout=30)
+    assert not thread.is_alive()
+
+    start = next(data for name, data in out["events"] if name == "start")
+    assert "project" not in start["context"]["sources"]
+
+
 def test_terminal_confirm_approved_runs_the_command(mock_client, session, tmp_path):
     import sys
 

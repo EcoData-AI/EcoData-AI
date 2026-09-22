@@ -59,6 +59,7 @@ interface ChatState {
   newConversation: () => Promise<string | null>
   renameConversation: (id: string, title: string) => Promise<void>
   togglePin: (id: string) => Promise<void>
+  setProject: (id: string, projectId: string | null) => Promise<void>
   deleteConversation: (id: string) => Promise<void>
   send: (content: string) => Promise<void>
   stop: () => void
@@ -156,6 +157,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       conversations: state.conversations
         .map((c) => (c.id === id ? { ...c, ...updated } : c))
         .sort((a, b) => Number(b.pinned) - Number(a.pinned)),
+    }))
+  },
+
+  async setProject(id, projectId) {
+    const updated = await api.updateConversation(id, { project_id: projectId })
+    set((state) => ({
+      conversations: state.conversations.map((c) => (c.id === id ? { ...c, ...updated } : c)),
     }))
   },
 

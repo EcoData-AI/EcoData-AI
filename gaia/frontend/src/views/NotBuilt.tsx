@@ -34,6 +34,9 @@ export function NotBuilt({ capability, label }: Props) {
         <ul>
           <li>Streaming chat with a configurable model provider</li>
           <li>Conversation history, search, rename, pin and delete — stored locally</li>
+          <li>Tools — calculator, Python sandbox, filesystem, terminal — with approvals</li>
+          <li>Voice — push-to-talk speech in, spoken replies out, fully local</li>
+          <li>Memory — opt-in, inspectable, and projects with goals, tasks and their own context</li>
           <li>Settings, privacy dashboard, system status and database backup</li>
         </ul>
       </div>

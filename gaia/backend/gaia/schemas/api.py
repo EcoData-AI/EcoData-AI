@@ -36,6 +36,7 @@ class ConversationOut(BaseModel):
     provider_id: str | None = None
     model_id: str | None = None
     system_prompt: str | None = None
+    project_id: str | None = None
     pinned: bool
     archived: bool
     created_at: datetime
@@ -52,6 +53,7 @@ class ConversationCreate(BaseModel):
     title: str | None = None
     provider_id: str | None = None
     model_id: str | None = None
+    project_id: str | None = None
 
 
 class ConversationUpdate(BaseModel):
@@ -61,6 +63,11 @@ class ConversationUpdate(BaseModel):
     system_prompt: str | None = None
     model_id: str | None = None
     provider_id: str | None = None
+    # Explicitly optional-and-nullable: `project_id: null` in the request body
+    # must be able to *unassign* a conversation, which is why `api/conversations.
+    # py` special-cases this field instead of relying on the generic update —
+    # see its own docstring/comment.
+    project_id: str | None = None
 
 
 class ChatRequest(BaseModel):
@@ -168,6 +175,7 @@ class MemoryOut(BaseModel):
     kind: str
     content: str
     source: str | None = None
+    project_id: str | None = None
     importance: float
     enabled: bool
     last_used_at: datetime | None = None
@@ -179,6 +187,64 @@ class MemoryUpdate(BaseModel):
     content: str | None = Field(default=None, min_length=1)
     importance: float | None = Field(default=None, ge=0.0, le=1.0)
     enabled: bool | None = None
+
+
+class ProjectOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    description: str | None = None
+    goals: str | None = None
+    workspace_path: str | None = None
+    archived: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = None
+    goals: str | None = None
+    workspace_path: str | None = None
+
+
+class ProjectUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = None
+    goals: str | None = None
+    workspace_path: str | None = None
+    archived: bool | None = None
+
+
+class ProjectTaskOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    title: str
+    notes: str | None = None
+    status: str
+    order_index: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectTaskCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    notes: str | None = None
+    status: str = "todo"
+
+
+class ProjectTaskUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=300)
+    notes: str | None = None
+    status: str | None = None
+
+
+class ProjectMemoryCreate(BaseModel):
+    content: str = Field(min_length=1)
+    importance: float = Field(default=0.5, ge=0.0, le=1.0)
 
 
 class TranscribeResponse(BaseModel):

@@ -18,8 +18,10 @@ from the running configuration rather than written by hand.
 | Filesystem access | **LOCAL** | Only inside directories you explicitly allow |
 | Terminal commands | **LOCAL** | Requires your approval every time; a directory you allowed |
 | Voice (microphone, synthesized speech) | **LOCAL** | See "Voice" below — nothing is sent anywhere, nothing is kept |
+| Memory | **LOCAL** | Stored only when you ask GAIA to remember something, and only after you approve it |
+| Projects (goals, tasks, project memory) | **LOCAL** | Same database; goals/tasks are yours, project memory follows the same opt-in rule as Memory |
 | Telemetry / analytics | **none** | GAIA collects nothing and phones home to nobody |
-| Memory, documents, web search | **not built** | Milestones 4, 5, 7 respectively |
+| Documents, web search | **not built** | Milestones 5, 7 respectively |
 
 ## What leaves your machine
 
@@ -72,6 +74,10 @@ like a secret as a backstop; no code path passes a key to a logger in the first 
 ## Deleting data
 
 - **One conversation** — delete it in the sidebar. Messages cascade immediately.
+- **A memory** — delete it on the Memory screen (or a project's own memory list). Immediate, and
+  it stops influencing replies on your very next turn.
+- **A project** — delete it on the Projects screen. Its tasks and project memory are deleted with
+  it; conversations that were assigned to it are kept, just unassigned.
 - **Everything** — quit GAIA and delete the data directory. Nothing survives elsewhere.
 - **An API key** — Settings → AI & Models → Remove key. This clears the keyring entry and the
   file fallback.
@@ -98,9 +104,9 @@ microphone button. There is no wake word and no always-on recording in this vers
 
 ## Features that are not built yet
 
-Memory, document ingestion, and web search do not exist yet. They are listed in the dashboard as
+Document ingestion and web search do not exist yet. They are listed in the dashboard as
 `NOT BUILT` rather than omitted, so the list stays a complete account of GAIA's data surface as
 features land. When they arrive:
 
-- Memory and documents will be **local**, and memory will be opt-in and inspectable.
+- Documents will be **local**.
 - Web search will be **external**, and will be labelled as such at the point of use.

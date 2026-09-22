@@ -32,12 +32,13 @@ from sqlalchemy.orm import Session
 
 from gaia.core.context_builder import build_context
 from gaia.db.base import utcnow
-from gaia.db.models import Message, TaskRun, ToolCall
+from gaia.db.models import Message, ProjectTask, TaskRun, ToolCall
 from gaia.llm.base import ChatMessage, LLMProvider, ProviderError, ToolCallRequest
 from gaia.llm.registry import build_provider
 from gaia.services import (
     conversation_service,
     memory_service,
+    project_service,
     settings_service,
     summarization_service,
     tool_confirmation,
@@ -239,6 +240,15 @@ async def stream_turn(session: Session, request: TurnRequest) -> AsyncIterator[s
 
     history = conversation_service.get_messages(session, conversation.id)
     memories = memory_service.relevant_memories(session)
+
+    project = None
+    open_tasks: list[ProjectTask] = []
+    if conversation.project_id:
+        project = project_service.get_project(session, conversation.project_id)
+        if project is not None:  # defensively tolerate a stale id — treat as no project
+            open_tasks = project_service.list_tasks(session, project.id, open_only=True)
+            memories = memories + memory_service.project_memories(session, project.id)
+
     context = build_context(
         history=history,
         context_window=context_window,
@@ -246,6 +256,8 @@ async def stream_turn(session: Session, request: TurnRequest) -> AsyncIterator[s
         conversation_system_prompt=conversation.system_prompt,
         summary=conversation.summary,
         memories=memories,
+        project=project,
+        project_tasks=open_tasks,
     )
     if memories:
         memory_service.mark_used(session, [m.id for m in memories])

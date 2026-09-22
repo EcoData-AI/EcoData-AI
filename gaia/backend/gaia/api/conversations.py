@@ -45,6 +45,7 @@ def create_conversation(
         title=payload.title,
         provider_id=payload.provider_id,
         model_id=payload.model_id,
+        project_id=payload.project_id,
     )
     return ConversationOut.model_validate(conversation)
 
@@ -73,9 +74,14 @@ def update_conversation(
         raise HTTPException(status_code=404, detail="Conversation not found")
     # `exclude_unset` matters: it is what lets a client clear `pinned` to False
     # without every other field being reset to its default.
-    conversation_service.update_conversation(
-        session, conversation, **payload.model_dump(exclude_unset=True)
-    )
+    fields = payload.model_dump(exclude_unset=True)
+    # `conversation_service.update_conversation`'s generic setattr loop skips any
+    # `None` value by design (so omitting a field never nulls it) — which would
+    # also silently swallow an explicit `project_id: null` meant to *unassign*
+    # this conversation from a project. Handle that one field directly.
+    if "project_id" in fields:
+        conversation.project_id = fields.pop("project_id")
+    conversation_service.update_conversation(session, conversation, **fields)
     return ConversationOut.model_validate(conversation)
 
 

@@ -1,6 +1,6 @@
 # Architecture
 
-GAIA Beta v0.1 — Milestones 1–3, plus Memory (Milestone 4, first slice).
+GAIA Beta v0.1 — Milestones 1–4.
 
 ## Stack
 
@@ -366,6 +366,46 @@ from the budgeting logic that produced it. The task opens its own `session_scope
 every exception; a failed summarisation must never surface as a chat-turn error, since by the
 time it runs the turn has already completed successfully.
 
+## Projects
+
+Milestone 4, second slice. `gaia/services/project_service.py` owns CRUD for `Project` and
+`ProjectTask` (schema already existed, unused until now) — same shape as `conversation_service.py`.
+`gaia/api/projects.py` is the HTTP surface: projects, their tasks, and one exception described
+below.
+
+**Project-scoped memory is created manually, not by the `remember` tool.** `Memory.kind="project"`
+requires a `project_id` (`memory_service.create_memory` enforces this — and, symmetrically,
+rejects a `project_id` on any other kind, so "a project memory always has exactly one project" is
+a database-level invariant, not just a convention). The model has no notion of "the current
+project" to scope a memory to — tools are conversation-agnostic by design (see "Memory" above) —
+so `POST /api/projects/{id}/memories` is the one place memory creation happens outside the
+CONFIRM-gated tool, deliberately scoped to a project and initiated from that project's page.
+Editing or deleting a project memory reuses the general `/api/memory/{id}` routes unchanged; the
+general Memory screen also lists project memories (tagged by `kind`), rather than hiding them, so
+"inspectable" still means everything.
+
+**A conversation is assigned to a project via `Conversation.project_id`**, a nullable FK that
+existed since Milestone 1 (`ondelete="SET NULL"` — deleting a project unassigns its conversations
+rather than deleting them). Setting it is an ordinary `PATCH /api/conversations/{id}` with
+`{"project_id": "..."}` — but *unassigning* needs one deliberate exception:
+`conversation_service.update_conversation`'s generic `setattr` loop skips any `None` value by
+design (so a client can never accidentally null a field just by omitting it), which would also
+silently swallow an explicit `{"project_id": null}` meant to clear it. `api/conversations.py`
+pops `project_id` out of the payload and sets it directly, before the generic call handles
+everything else — the one field genuinely needs to accept `None` as a real, intentional value.
+
+**Project-aware context** is `context_builder.build_context`'s `project`/`project_tasks`
+parameters: when a conversation's `project_id` is set, `chat_service.stream_turn` resolves the
+`Project`, its open (`status != "done"`) tasks, and its project-scoped memories
+(`memory_service.project_memories`), merging the memories into the same list the Memory slice
+already built (so `## Things to remember about the user` and the `"memory"` source need no
+changes — each line already shows its `kind`, so a `(project)` entry reads as scoped on its own)
+and passing `project`/`project_tasks` separately for their own `## Current project` section (name,
+description, goals, and open task *titles* — not notes, to stay compact), appending `"project"` to
+`sources`. `memory_service.relevant_memories()` (the general, non-project list) explicitly
+excludes `kind="project"` — otherwise every project's memory would leak into every conversation
+regardless of assignment, not just the ones actually working on that project.
+
 ## Context builder
 
 `core/context_builder.py` decides what is actually sent. It assembles the persona, the user's
@@ -385,11 +425,11 @@ The full schema from the brief exists up front so migrations stay linear as mile
 
 | Live | Schema only (no API surface) |
 |---|---|
-| `conversations`, `messages` | `projects`, `project_tasks` |
-| `settings`, `task_runs` | `documents`, `document_chunks` |
-| `tool_calls` (audit — live from Milestone 2) | `experiments`, `simulation_runs` |
-| `workspace_roots` (live from Milestone 2) | `study_plans`, `learning_progress` |
-| `memories` (live from Milestone 4) | `permissions` |
+| `conversations`, `messages` | `documents`, `document_chunks` |
+| `settings`, `task_runs` | `experiments`, `simulation_runs` |
+| `tool_calls` (audit — live from Milestone 2) | `study_plans`, `learning_progress` |
+| `workspace_roots` (live from Milestone 2) | `permissions` |
+| `memories`, `projects`, `project_tasks` (live from Milestone 4) | |
 
 `messages.sequence` is a monotonic per-conversation integer with a uniqueness constraint —
 timestamps collide under streaming, so ordering cannot depend on them. Alembic runs
@@ -410,11 +450,14 @@ The brief's §3 and §53 are enforced structurally rather than by remembering:
 
 ## Known limits in v0.1
 
-- **Memory has no retrieval — it's a capped, unconditional list.** `relevant_memories()` returns
-  every enabled memory (up to 20), ranked by importance and recency; there is no embedding search
-  to pick the ones actually relevant to the current turn. Fine at the scale one person's opt-in
-  memories reach; would need real retrieval well before Milestone 5's document RAG work reuses
-  the same idea at larger scale.
+- **Memory has no retrieval — it's a capped, unconditional list.** `relevant_memories()` and
+  `project_memories()` both return every enabled memory in scope (up to 20), ranked by importance
+  and recency; there is no embedding search to pick the ones actually relevant to the current
+  turn. Fine at the scale one person's (or one project's) opt-in memories reach; would need real
+  retrieval well before Milestone 5's document RAG work reuses the same idea at larger scale.
+- **A project's own conversations aren't listed or filterable anywhere.** The topbar picker
+  assigns a conversation to a project, but there is no "show me every conversation in this
+  project" view yet — the sidebar's conversation list is not project-aware.
 - **`sqlite+pysqlite` with sync sessions inside async endpoints.** Local SQLite writes are
   sub-millisecond, so they run inline. This becomes a real blocking concern only if storage
   moves off local SQLite, at which point the async engine (`aiosqlite`, already in the URL

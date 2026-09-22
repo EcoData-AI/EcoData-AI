@@ -1,11 +1,10 @@
 """Context Builder — decides what actually gets sent to the model.
 
-The rule from the product spec is: never send the whole database to the LLM.
-Today the only inputs are the system prompt and the conversation itself, so the
-job is budgeting the conversation against the model's context window. Memories,
-project context and retrieved documents plug into `build_context` as later
-milestones land; the return shape is designed so those additions do not change
-the caller.
+The rule from the product spec is: never send the whole database to the LLM,
+so the job is budgeting the conversation, memories and project context against
+the model's context window. Retrieved documents plug into `build_context` once
+Milestone 5 lands; the return shape is designed so that addition does not
+change the caller, the same way memory and project context did not.
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from gaia.core.persona import build_system_prompt
-from gaia.db.models import Memory, Message
+from gaia.db.models import Memory, Message, Project, ProjectTask
 from gaia.llm.base import ChatMessage
 
 #: Rough characters-per-token used for budgeting. Deliberately conservative
@@ -56,6 +55,8 @@ def build_context(
     conversation_system_prompt: str | None = None,
     summary: str | None = None,
     memories: list[Memory] | None = None,
+    project: Project | None = None,
+    project_tasks: list[ProjectTask] | None = None,
 ) -> BuiltContext:
     """Assemble the request payload for one turn.
 
@@ -72,6 +73,18 @@ def build_context(
         sources.append("custom_instructions")
     if conversation_system_prompt:
         sources.append("conversation_instructions")
+
+    if project is not None:
+        parts = [f"Name: {project.name}"]
+        if project.description and project.description.strip():
+            parts.append(f"Description: {project.description.strip()}")
+        if project.goals and project.goals.strip():
+            parts.append(f"Goals: {project.goals.strip()}")
+        if project_tasks:
+            task_lines = "\n".join(f"- {t.title}" for t in project_tasks)
+            parts.append(f"Open tasks:\n{task_lines}")
+        system += "\n## Current project\n" + "\n".join(parts) + "\n"
+        sources.append("project")
 
     if memories:
         lines = "\n".join(f"- ({m.kind}) {m.content}" for m in memories)

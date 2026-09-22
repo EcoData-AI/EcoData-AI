@@ -18,7 +18,7 @@ from typing import Any
 
 from gaia.db.session import session_scope
 from gaia.services import memory_service
-from gaia.services.memory_service import ALLOWED_KINDS, MemoryError
+from gaia.services.memory_service import MODEL_ALLOWED_KINDS, MemoryError
 from gaia.tools.base import RiskLevel, Tool, ToolResult
 
 
@@ -39,7 +39,7 @@ class RememberTool(Tool):
             },
             "kind": {
                 "type": "string",
-                "enum": list(ALLOWED_KINDS),
+                "enum": list(MODEL_ALLOWED_KINDS),
                 "description": (
                     "'semantic' for a durable fact or preference (default); "
                     "'episodic' for something specific to remember from this conversation."
@@ -56,8 +56,10 @@ class RememberTool(Tool):
 
         if not isinstance(content, str) or not content.strip():
             return ToolResult(ok=False, content="", error="'content' must be a non-empty string")
-        if not isinstance(kind, str):
-            return ToolResult(ok=False, content="", error="'kind' must be a string")
+        if kind not in MODEL_ALLOWED_KINDS:
+            return ToolResult(
+                ok=False, content="", error=f"'kind' must be one of {MODEL_ALLOWED_KINDS}"
+            )
 
         try:
             with session_scope() as session:

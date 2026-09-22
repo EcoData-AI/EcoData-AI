@@ -17,11 +17,13 @@ def create_conversation(
     title: str | None = None,
     provider_id: str | None = None,
     model_id: str | None = None,
+    project_id: str | None = None,
 ) -> Conversation:
     conversation = Conversation(
         title=(title or DEFAULT_TITLE).strip()[:300] or DEFAULT_TITLE,
         provider_id=provider_id,
         model_id=model_id,
+        project_id=project_id,
     )
     session.add(conversation)
     session.commit()

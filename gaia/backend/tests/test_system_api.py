@@ -38,11 +38,12 @@ def test_capabilities_are_reported_honestly(client):
     # Milestone 3: voice (first slice) shipped ahead of Memory/Projects — it
     # depended on no earlier unbuilt milestone and was ready first.
     assert capabilities["voice"]["available"] is True
-    # Milestone 4, first slice: memory shipped; Projects is still pending.
+    # Milestone 4: memory (first slice) and projects (second slice) both shipped.
     assert capabilities["memory"]["available"] is True
+    assert capabilities["projects"]["available"] is True
 
     # None of these ship yet; the API must not claim otherwise.
-    for key in ("projects", "research", "simulation"):
+    for key in ("research", "simulation"):
         assert capabilities[key]["available"] is False
         assert capabilities[key]["milestone"] > 1
 
@@ -60,7 +61,7 @@ def test_system_status_marks_unbuilt_components(client):
     assert names["Database"] == "ok"
     # With no API key configured, the LLM must not report "ok".
     assert names["LLM"] in {"not_configured", "error"}
-    assert names["Projects"] == "not_built"
+    assert names["Research"] == "not_built"
 
 
 def test_system_status_reports_a_built_capability_as_ok(client):
@@ -75,6 +76,7 @@ def test_system_status_reports_a_built_capability_as_ok(client):
     assert names["Terminal"] == "ok"
     assert names["Voice"] == "ok"
     assert names["Memory"] == "ok"
+    assert names["Projects"] == "ok"
 
 
 def test_privacy_dashboard_marks_cloud_inference(client):
@@ -111,6 +113,12 @@ def test_privacy_dashboard_reports_memory_as_shipped(client):
     # Milestone 4, first slice: memory must not still be listed NOT BUILT.
     rows = {row["label"]: row for row in client.get("/api/privacy").json()}
     assert rows["Memory"]["location"] == "LOCAL"
+
+
+def test_privacy_dashboard_reports_projects_as_shipped(client):
+    # Milestone 4, second slice: projects must not still be listed NOT BUILT.
+    rows = {row["label"]: row for row in client.get("/api/privacy").json()}
+    assert rows["Projects"]["location"] == "LOCAL"
 
 
 def test_privacy_dashboard_lists_logs_and_backups(client):

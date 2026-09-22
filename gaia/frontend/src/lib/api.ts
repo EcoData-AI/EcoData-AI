@@ -52,6 +52,7 @@ export interface Conversation {
   provider_id: string | null
   model_id: string | null
   system_prompt: string | null
+  project_id: string | null
   pinned: boolean
   archived: boolean
   created_at: string
@@ -118,9 +119,32 @@ export interface Memory {
   kind: string
   content: string
   source: string | null
+  project_id: string | null
   importance: number
   enabled: boolean
   last_used_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Project {
+  id: string
+  name: string
+  description: string | null
+  goals: string | null
+  workspace_path: string | null
+  archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ProjectTask {
+  id: string
+  project_id: string
+  title: string
+  notes: string | null
+  status: string
+  order_index: number
   created_at: string
   updated_at: string
 }
@@ -259,6 +283,50 @@ export const api = {
     request<Memory>(`/api/memory/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
   deleteMemory: (id: string) => request<void>(`/api/memory/${id}`, { method: 'DELETE' }),
+
+  listProjects: (includeArchived?: boolean) =>
+    request<Project[]>(`/api/projects${includeArchived ? '?include_archived=true' : ''}`),
+
+  createProject: (payload: { name: string; description?: string; goals?: string }) =>
+    request<Project>('/api/projects', { method: 'POST', body: JSON.stringify(payload) }),
+
+  getProject: (id: string) => request<Project>(`/api/projects/${id}`),
+
+  updateProject: (id: string, patch: Partial<Project>) =>
+    request<Project>(`/api/projects/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  deleteProject: (id: string) => request<void>(`/api/projects/${id}`, { method: 'DELETE' }),
+
+  listProjectTasks: (projectId: string) =>
+    request<ProjectTask[]>(`/api/projects/${projectId}/tasks`),
+
+  createProjectTask: (projectId: string, payload: { title: string; notes?: string }) =>
+    request<ProjectTask>(`/api/projects/${projectId}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateProjectTask: (
+    projectId: string,
+    taskId: string,
+    patch: { title?: string; notes?: string; status?: string },
+  ) =>
+    request<ProjectTask>(`/api/projects/${projectId}/tasks/${taskId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+
+  deleteProjectTask: (projectId: string, taskId: string) =>
+    request<void>(`/api/projects/${projectId}/tasks/${taskId}`, { method: 'DELETE' }),
+
+  listProjectMemories: (projectId: string) =>
+    request<Memory[]>(`/api/projects/${projectId}/memories`),
+
+  createProjectMemory: (projectId: string, content: string) =>
+    request<Memory>(`/api/projects/${projectId}/memories`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    }),
 
   exportBackupUrl: () => `${apiBase()}/api/backup/export`,
 
