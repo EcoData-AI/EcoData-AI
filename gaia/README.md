@@ -6,10 +6,11 @@ GAIA is software: a program that runs language models and tools on your behalf. 
 conscious and does not pretend to be. Your conversations, settings and data stay on your
 machine; you choose which model provider — cloud or fully local — answers your questions.
 
-> **Status: Beta v0.1 — Milestone 1.**
-> Chat, conversation history and model providers work. Tools, memory, projects, documents,
-> research, tutoring, simulation and voice are **not built yet**. GAIA says so plainly in the
-> interface and in conversation rather than pretending otherwise. See [ROADMAP.md](docs/ROADMAP.md).
+> **Status: Beta v0.1 — Milestones 1–3.**
+> Chat, conversation history, model providers, tools (calculator, Python, filesystem, terminal)
+> and voice (first slice) work. Memory, projects, documents, research, tutoring and simulation
+> are **not built yet**. GAIA says so plainly in the interface and in conversation rather than
+> pretending otherwise. See [ROADMAP.md](docs/ROADMAP.md).
 
 ---
 
@@ -24,13 +25,15 @@ machine; you choose which model provider — cloud or fully local — answers yo
 | Privacy dashboard and system status | ✅ |
 | Local SQLite storage with export/import backups | ✅ |
 | API keys in the OS keyring, never in the database | ✅ |
-| Tools · Python · filesystem · terminal | ⛔ Milestone 2 |
-| Memory · Projects | ⛔ Milestone 3 |
-| Documents & RAG | ⛔ Milestone 4 |
-| Tutor · Study | ⛔ Milestone 5 |
-| Research | ⛔ Milestone 6 |
-| Economics · Game theory · Simulation | ⛔ Milestones 7–8 |
-| Voice | ⛔ Milestone 9 |
+| Tools · Python sandbox · filesystem · terminal, with SAFE/CONFIRM/BLOCKED gating and an audit trail | ✅ |
+| Voice — push-to-talk STT/TTS, fully local | ✅ |
+| Memory · Projects | ⛔ Milestone 4 |
+| Documents & RAG | ⛔ Milestone 5 |
+| Tutor · Study | ⛔ Milestone 6 |
+| Research | ⛔ Milestone 7 |
+| Economics · Game theory | ⛔ Milestone 8 |
+| Simulation Lab | ⛔ Milestone 9 |
+| Autonomous agent loop | ⛔ Milestone 10 |
 
 ---
 
@@ -105,11 +108,11 @@ GAIA/
 ├── logs/         structured JSON logs, rotated
 ├── backups/      database exports
 ├── config/       credential fallback when no OS keyring is available
-├── documents/    (Milestone 4)
-├── projects/     (Milestone 3)
-├── experiments/  (Milestone 8)
-├── memory/       (Milestone 3)
-└── sandbox/      (Milestone 2)
+├── sandbox/      workspace-scoped filesystem and Python sandbox roots
+├── documents/    (Milestone 5)
+├── projects/     (Milestone 4)
+├── memory/       (Milestone 4)
+└── experiments/  (Milestone 9)
 ```
 
 API keys are stored in your OS keyring — never in the database, never in a backup, never in git.
