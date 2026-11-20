@@ -9,6 +9,7 @@ from the UI unless `GAIA_ENABLE_MOCK_PROVIDER=1` is set.
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import AsyncIterator, Sequence
 
 from gaia.llm.base import (
@@ -52,6 +53,49 @@ REMEMBER_TRIGGER = "remember:"
 #: a tool result comes back — used to test the loop's iteration cap against a
 #: model that never stops calling tools.
 TOOLLOOP_TRIGGER = "toolloop:"
+
+#: Study tools (Milestone 6). "course:<subject>" requests `start_course` with
+#: the canned `MOCK_COURSE_MODULES` outline; "grade:<topic>|<score>" requests
+#: `record_study_progress`; "level:<level>" requests `set_study_level`.
+COURSE_TRIGGER = "course:"
+GRADE_TRIGGER = "grade:"
+LEVEL_TRIGGER = "level:"
+
+#: Labelled as mock output in the titles themselves, so a course created from
+#: it can never be mistaken for one a model designed.
+MOCK_COURSE_MODULES = [
+    {"title": "[mock] Foundations", "topics": ["[mock] First idea", "[mock] Second idea"]},
+    {"title": "[mock] Applications", "topics": ["[mock] Worked example"]},
+]
+
+#: `gaia.study.curriculum.generate_outline`'s prompt starts with this; the mock
+#: answers it with `MOCK_COURSE_MODULES` as JSON so the Study screen's
+#: generation path works offline too.
+COURSE_GENERATION_PREFIX = "Design a self-study course on:"
+
+
+def _study_tool_call(text: str) -> ToolCallRequest | None:
+    lowered = text.strip().lower()
+    rest = text.split(":", 1)[1].strip() if ":" in text else ""
+    if lowered.startswith(COURSE_TRIGGER):
+        return ToolCallRequest(
+            id="mock-call-1",
+            name="start_course",
+            arguments={"subject": rest, "modules": MOCK_COURSE_MODULES},
+        )
+    if lowered.startswith(GRADE_TRIGGER):
+        topic, _, score = rest.rpartition("|")
+        return ToolCallRequest(
+            id="mock-call-1",
+            name="record_study_progress",
+            arguments={
+                "topic": topic.strip(),
+                "score": int(score) if score.strip().isdigit() else score,
+            },
+        )
+    if lowered.startswith(LEVEL_TRIGGER):
+        return ToolCallRequest(id="mock-call-1", name="set_study_level", arguments={"level": rest})
+    return None
 
 
 class MockProvider(LLMProvider):
@@ -220,6 +264,21 @@ class MockProvider(LLMProvider):
                 type="usage", usage=Usage(input_tokens=len(last_user.split()), output_tokens=0)
             )
             yield StreamEvent(type="done", stop_reason="tool_use")
+            return
+
+        study_call = _study_tool_call(last_user) if tools else None
+        if study_call is not None:
+            yield StreamEvent(type="tool_use", tool_calls=[study_call])
+            yield StreamEvent(
+                type="usage", usage=Usage(input_tokens=len(last_user.split()), output_tokens=0)
+            )
+            yield StreamEvent(type="done", stop_reason="tool_use")
+            return
+
+        if not tools and last_user.startswith(COURSE_GENERATION_PREFIX):
+            yield StreamEvent(type="text", text=json.dumps({"modules": MOCK_COURSE_MODULES}))
+            yield StreamEvent(type="usage", usage=Usage(input_tokens=1, output_tokens=1))
+            yield StreamEvent(type="done", stop_reason="end_turn")
             return
 
         reply = f"[mock provider] You said: {last_user}"

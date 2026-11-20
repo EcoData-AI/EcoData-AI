@@ -38,6 +38,7 @@ export function NotBuilt({ capability, label }: Props) {
           <li>Voice — push-to-talk speech in, spoken replies out, fully local</li>
           <li>Memory — opt-in, inspectable, and projects with goals, tasks and their own context</li>
           <li>Knowledge — upload PDF/text/code, retrieved and cited automatically in replies</li>
+          <li>Study — courses with a Socratic tutor, graded answers and spaced repetition</li>
           <li>Settings, privacy dashboard, system status and database backup</li>
         </ul>
       </div>

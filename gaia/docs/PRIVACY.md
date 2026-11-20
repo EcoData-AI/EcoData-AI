@@ -21,6 +21,7 @@ from the running configuration rather than written by hand.
 | Memory | **LOCAL** | Stored only when you ask GAIA to remember something, and only after you approve it |
 | Projects (goals, tasks, project memory) | **LOCAL** | Same database; goals/tasks are yours, project memory follows the same opt-in rule as Memory |
 | Documents | **LOCAL** | The file and its extracted text stay in your data directory; retrieval is lexical (BM25), nothing is sent anywhere to search it |
+| Study (courses, per-topic grades and review dates) | **LOCAL** | Same database; written only inside a course you created, and resettable or deletable on the Study screen |
 | Telemetry / analytics | **none** | GAIA collects nothing and phones home to nobody |
 | Web search | **not built** | Milestone 7 |
 
@@ -29,7 +30,8 @@ from the running configuration rather than written by hand.
 Exactly one thing, and only if you configure a cloud provider: **the text of a chat turn**. That
 means the system prompt, your custom instructions, the portion of the conversation history that
 fits the context budget, and whatever `context_builder` assembled for that turn — project
-context, remembered facts, and any document passages BM25 retrieved. If a tool call happened
+context, remembered facts, any document passages BM25 retrieved, and — in a study session —
+the course outline with your per-topic progress. If a tool call happened
 (reading a file, running Python, a terminal command), its result is fed back to the model within
 the same turn and is sent the same way. All of this only ever goes to the provider you configured
 for that turn; nothing is sent anywhere else.
@@ -84,6 +86,9 @@ like a secret as a backstop; no code path passes a key to a logger in the first 
   it; conversations that were assigned to it are kept, just unassigned.
 - **A document** — delete it on the Knowledge screen. Removes the stored file and every chunk of
   its extracted text; it immediately stops being found by retrieval.
+- **A course** — delete it on the Study screen: the outline and every grade and review date go
+  with it; its study sessions are kept as ordinary conversations. **Reset progress** clears the
+  grades but keeps the course.
 - **Everything** — quit GAIA and delete the data directory. Nothing survives elsewhere.
 - **An API key** — Settings → AI & Models → Remove key. This clears the keyring entry and the
   file fallback.

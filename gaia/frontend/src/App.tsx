@@ -9,6 +9,7 @@ import { NotBuilt } from '@/views/NotBuilt'
 import { Onboarding } from '@/views/Onboarding'
 import { Projects } from '@/views/Projects'
 import { Settings, applyTheme } from '@/views/Settings'
+import { Study } from '@/views/Study'
 
 type Boot =
   | { phase: 'connecting' }
@@ -117,7 +118,6 @@ export function App() {
 
   const capabilityFor = (key: string) => capabilities.find((c) => c.key === key)
   const viewCapability: Partial<Record<ViewId, string>> = {
-    study: 'study',
     research: 'research',
     simulation: 'simulation',
     experiments: 'experiments',
@@ -153,6 +153,14 @@ export function App() {
         {view === 'memory' && <Memory />}
         {view === 'projects' && <Projects />}
         {view === 'knowledge' && <Knowledge />}
+        {view === 'study' && (
+          <Study
+            onOpenConversation={(id) => {
+              setView('chat')
+              void chat.loadConversations().then(() => chat.selectConversation(id))
+            }}
+          />
+        )}
         {viewCapability[view] && (
           <NotBuilt capability={capabilityFor(viewCapability[view]!)} label={view} />
         )}

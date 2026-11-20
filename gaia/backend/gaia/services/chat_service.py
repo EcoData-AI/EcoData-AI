@@ -41,10 +41,11 @@ from gaia.services import (
     memory_service,
     project_service,
     settings_service,
+    study_service,
     summarization_service,
     tool_confirmation,
 )
-from gaia.tools.base import RiskLevel, ToolResult
+from gaia.tools.base import RiskLevel, ToolContext, ToolResult
 from gaia.tools.registry import get_tool, tool_specs_for_provider
 
 logger = logging.getLogger("gaia.chat")
@@ -80,7 +81,7 @@ async def _resolve(session: Session, request: TurnRequest) -> tuple[LLMProvider,
     return provider, model_id, (info.context_window if info else 0)
 
 
-async def _execute_tool(tool_name: str, arguments: dict) -> ToolResult:
+async def _execute_tool(tool_name: str, arguments: dict, context: ToolContext) -> ToolResult:
     """Run a tool, timed, with a backstop so a buggy tool can never crash the turn.
 
     `Tool.execute` is documented to never raise, but this is the last line of
@@ -91,7 +92,7 @@ async def _execute_tool(tool_name: str, arguments: dict) -> ToolResult:
     if tool is None:
         return ToolResult(ok=False, content="", error="That tool is not available.")
     try:
-        return await tool.execute(arguments)
+        return await tool.execute_with_context(arguments, context)
     except Exception as exc:  # noqa: BLE001 - deliberate backstop, see docstring
         logger.exception("tool execution failed", extra={"tool": tool_name})
         return ToolResult(ok=False, content="", error=f"The tool raised an unexpected error: {exc}")
@@ -112,6 +113,7 @@ async def _run_tool_calls(
     place) so the next provider call sees the answer, and appends a summary
     dict onto `tool_call_log` (in place) for `Message.extra`.
     """
+    context = ToolContext(conversation_id=conversation.id)
     for call in requests:
         tool = get_tool(call.name)
         risk_level = tool.risk_level.value if tool is not None else RiskLevel.BLOCKED.value
@@ -156,14 +158,14 @@ async def _run_tool_calls(
                 row.status = "running"
                 session.commit()
                 started = time.perf_counter()
-                result = await _execute_tool(call.name, call.arguments)
+                result = await _execute_tool(call.name, call.arguments, context)
                 row.duration_ms = int((time.perf_counter() - started) * 1000)
         else:  # SAFE — BLOCKED tools never reach here; they were filtered out
             approval = "auto"  # of `tool_specs_for_provider()`, so no model asks for one.
             row.status = "running"
             session.commit()
             started = time.perf_counter()
-            result = await _execute_tool(call.name, call.arguments)
+            result = await _execute_tool(call.name, call.arguments, context)
             row.duration_ms = int((time.perf_counter() - started) * 1000)
 
         row.approval = approval
@@ -250,6 +252,13 @@ async def stream_turn(session: Session, request: TurnRequest) -> AsyncIterator[s
             open_tasks = project_service.list_tasks(session, project.id, open_only=True)
             memories = memories + memory_service.project_memories(session, project.id)
 
+    study_plan = None
+    study_status = None
+    if conversation.study_plan_id:
+        study_plan = study_service.get_plan(session, conversation.study_plan_id)
+        if study_plan is not None:  # same stale-id tolerance as the project lookup above
+            study_status = study_service.plan_status(study_plan)
+
     retrieved_chunks = document_retrieval.search(
         session, request.content, project_id=conversation.project_id
     )
@@ -264,6 +273,8 @@ async def stream_turn(session: Session, request: TurnRequest) -> AsyncIterator[s
         project=project,
         project_tasks=open_tasks,
         retrieved_chunks=retrieved_chunks,
+        study_plan=study_plan,
+        study_status=study_status,
     )
     if memories:
         memory_service.mark_used(session, [m.id for m in memories])

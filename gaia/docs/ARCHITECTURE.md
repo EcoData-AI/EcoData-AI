@@ -155,7 +155,13 @@ class Tool(abc.ABC):
     name: str; description: str; parameters: dict  # JSON Schema
     risk_level: RiskLevel                            # SAFE | CONFIRM | BLOCKED
     async def execute(self, arguments: dict) -> ToolResult   # must never raise
+    async def execute_with_context(self, arguments, context: ToolContext) -> ToolResult
 ```
+
+`chat_service` always calls `execute_with_context`, whose default simply drops the
+`ToolContext` (today just the `conversation_id`) and calls `execute` — so a tool is
+conversation-agnostic unless it deliberately overrides it. Only the study tools do (see "Tutor and
+study" below); Milestone 6 brings the registry to nine tools.
 
 **Risk level is a class attribute the tool itself declares — never something the model, the
 request, or a prompt can set.** The registry is the enforcement point:
@@ -380,7 +386,8 @@ below.
 requires a `project_id` (`memory_service.create_memory` enforces this — and, symmetrically,
 rejects a `project_id` on any other kind, so "a project memory always has exactly one project" is
 a database-level invariant, not just a convention). The model has no notion of "the current
-project" to scope a memory to — tools are conversation-agnostic by design (see "Memory" above) —
+project" to scope a memory to — tools are conversation-agnostic by design (see "Memory" above; the study tools are the one
+deliberate exception, "Tutor and study" below) —
 so `POST /api/projects/{id}/memories` is the one place memory creation happens outside the
 CONFIRM-gated tool, deliberately scoped to a project and initiated from that project's page.
 Editing or deleting a project memory reuses the general `/api/memory/{id}` routes unchanged; the
@@ -457,6 +464,61 @@ rather than inventing a new source name. This is prompting, not enforcement — 
 making citations happen; there is no server-side check that a cited label actually appears in the
 assistant's reply.
 
+## Tutor and study
+
+Milestone 6. Pure logic lives in `gaia/study/` (mirroring `gaia/documents/`):
+`scheduling.py` is SM-2 spaced repetition plus a mastery estimate, `curriculum.py` validates
+course outlines and generates one from a model. `services/study_service.py` is where they meet the
+database; `tools/study.py` is the chat side; `api/study.py` is the HTTP surface.
+
+**A course is a `StudyPlan`; a tutoring session is just a conversation.** `Conversation.
+study_plan_id` (new FK, `SET NULL` — deleting a course leaves its sessions as ordinary
+conversations) marks a conversation as a session. There is no separate tutoring endpoint: the
+turn goes through `chat_service.stream_turn` like any other, which loads the plan and its
+`plan_status()` and hands both to `context_builder.build_context`, which adds a `## Tutor mode`
+section and the `"tutor"` source. That section carries the outline with per-topic progress, due
+reviews, the focus topic, and the teaching rules — one question at a time, hints rather than
+answers while the user is working, reveal only when asked, grade every real answer.
+
+**The outline is validated wherever it comes from.** `{"modules": [{"title", "topics": [...]}]}`
+with 1–12 modules, 1–12 topics each, topic titles unique across the course ignoring case and
+spacing — because `LearningProgress` rows are keyed by topic title, so a duplicate would make two
+topics share one score. Two ways in: the Study screen's "Create course", where the configured
+model writes the outline from a JSON-only prompt (`curriculum.generate_outline`, tolerant of a
+code fence or a line of preamble, and nothing is stored if the result doesn't validate); or the
+chat model calling `start_course` with an outline it proposes itself.
+
+**Three tools, two risk levels.**
+
+| Tool | Risk | Writes |
+|---|---|---|
+| `start_course` | `CONFIRM` | A new course, and links *this* conversation to it |
+| `record_study_progress` | `SAFE` | One graded attempt (0–5) at one topic of *this* conversation's course |
+| `set_study_level` | `SAFE` | The level of *this* conversation's course |
+
+`start_course` is CONFIRM because it creates something new from the model's own proposal; the
+approval card renders the outline itself (`ToolCallCard`'s `renderCourseProposal`), not a JSON
+blob, since approving something unreadable is not consent. The other two are SAFE on purpose,
+unlike `remember`: they can only write inside a course the user explicitly created and is
+studying in that very conversation, everything they write is visible and resettable on the Study
+screen, and every call still lands in `tool_calls`. Grading is also the core loop of tutoring —
+an approval dialog after every answer would make the feature unusable. A study tool called in a
+conversation that is not a session refuses with a readable error, and one called without a
+`ToolContext` at all refuses too.
+
+**Scheduling is textbook SM-2, mastery is separate.** A grade below 3 resets the repetition count
+and brings the topic back tomorrow; passing grades grow the interval 1 → 6 → `interval × ease`
+days; ease drifts with difficulty, floored at 1.3. SM-2 answers "when should this come back",
+not "how well do you know it", so mastery is its own exponential moving average of normalised
+grades (newest weighted 0.4), and a topic counts as mastered at 80%. The focus topic is the first
+not-yet-mastered topic in teaching order; due reviews are listed ahead of it. A row exists only
+once a topic has been graded; an unstudied topic simply has none.
+
+**Level assessment** is the tutor's job, not a form: with `level` unset (the default — "Assess my
+level" on the Study screen), the tutor-mode section tells the model to open with a two-or-three
+question diagnostic and store the result with `set_study_level`. The user can still set or
+correct the level by hand.
+
 ## Context builder
 
 `core/context_builder.py` decides what is actually sent. It assembles the persona, the user's
@@ -477,11 +539,15 @@ The full schema from the brief exists up front so migrations stay linear as mile
 | Live | Schema only (no API surface) |
 |---|---|
 | `conversations`, `messages` | `experiments`, `simulation_runs` |
-| `settings`, `task_runs` | `study_plans`, `learning_progress` |
-| `tool_calls` (audit — live from Milestone 2) | `permissions` |
+| `settings`, `task_runs` | `permissions` |
+| `tool_calls` (audit — live from Milestone 2) | |
 | `workspace_roots` (live from Milestone 2) | |
 | `memories`, `projects`, `project_tasks` (live from Milestone 4) | |
 | `documents`, `document_chunks` (live from Milestone 5) | |
+| `study_plans`, `learning_progress` (live from Milestone 6) | |
+
+Migrations: `f4912cad95c6` is the initial schema; `b7d2e9a41c03` (Milestone 6) adds SM-2 state
+to `learning_progress`, a one-row-per-topic constraint, and `conversations.study_plan_id`.
 
 `messages.sequence` is a monotonic per-conversation integer with a uniqueness constraint —
 timestamps collide under streaming, so ordering cannot depend on them. Alembic runs
@@ -520,6 +586,13 @@ The brief's §3 and §53 are enforced structurally rather than by remembering:
   sub-millisecond, so they run inline. This becomes a real blocking concern only if storage
   moves off local SQLite, at which point the async engine (`aiosqlite`, already in the URL
   helper) is the path.
+- **The tutor's behaviour is prompting, not enforcement.** Nothing server-side stops a model
+  from blurting out an answer the rules say to withhold, or from grading generously; grades are
+  the model's judgement of a free-text answer. A weaker model follows the tutor-mode rules less
+  reliably, and the Study screen's self-grading is there partly so the user can correct the
+  record. Exercises and quizzes are written inline in the conversation, not stored as their own
+  objects, and progress is keyed by topic title — so the outline cannot be edited after creation
+  without orphaning progress (it is not editable today for that reason).
 - **Cost estimates are catalogue-based**, so they are wrong for a model GAIA does not know. The
   UI renders unknown costs as `—` rather than guessing.
 - **No request cancellation on the server.** Pressing Stop aborts the client stream; the

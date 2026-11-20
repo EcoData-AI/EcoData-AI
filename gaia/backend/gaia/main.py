@@ -19,6 +19,7 @@ from gaia.api import (
     memory,
     projects,
     providers,
+    study,
     system,
     voice,
     workspace,
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(memory.router)
     app.include_router(projects.router)
     app.include_router(documents.router)
+    app.include_router(study.router)
 
     @app.exception_handler(Exception)
     async def unhandled_exception(request: Request, exc: Exception) -> JSONResponse:

@@ -53,6 +53,8 @@ export interface Conversation {
   model_id: string | null
   system_prompt: string | null
   project_id: string | null
+  /** Set when this conversation is a tutoring session for a course. */
+  study_plan_id: string | null
   pinned: boolean
   archived: boolean
   created_at: string
@@ -159,6 +161,46 @@ export interface Document {
   status: string
   chunk_count: number
   created_at: string
+}
+
+export type StudyLevel = 'beginner' | 'intermediate' | 'advanced'
+
+export interface StudyOutline {
+  modules: { title: string; topics: string[] }[]
+}
+
+export interface StudyTopic {
+  module: string
+  topic: string
+  mastery: number
+  attempts: number
+  mastered: boolean
+  due: boolean
+  last_score: number | null
+  last_note: string | null
+  last_reviewed_at: string | null
+  next_review_at: string | null
+}
+
+export interface StudyPlan {
+  id: string
+  subject: string
+  goal: string | null
+  /** `null` until the tutor's diagnostic has assessed it. */
+  level: StudyLevel | null
+  active: boolean
+  created_at: string
+  updated_at: string
+  topic_count: number
+  mastered_count: number
+  due_count: number
+  current_topic: string | null
+  latest_conversation_id: string | null
+}
+
+export interface StudyPlanDetail extends StudyPlan {
+  outline: StudyOutline
+  topics: StudyTopic[]
 }
 
 export interface PrivacyRow {
@@ -351,6 +393,45 @@ export const api = {
   },
 
   deleteDocument: (id: string) => request<void>(`/api/documents/${id}`, { method: 'DELETE' }),
+
+  listStudyPlans: () => request<StudyPlan[]>('/api/study/plans'),
+
+  /** Without an `outline`, the configured model writes one — this can take a while. */
+  createStudyPlan: (payload: {
+    subject: string
+    goal?: string
+    level?: StudyLevel | null
+    outline?: StudyOutline
+  }) =>
+    request<StudyPlanDetail>('/api/study/plans', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  getStudyPlan: (id: string) => request<StudyPlanDetail>(`/api/study/plans/${id}`),
+
+  updateStudyPlan: (
+    id: string,
+    patch: { goal?: string; level?: StudyLevel; active?: boolean },
+  ) =>
+    request<StudyPlanDetail>(`/api/study/plans/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+
+  deleteStudyPlan: (id: string) => request<void>(`/api/study/plans/${id}`, { method: 'DELETE' }),
+
+  reviewStudyTopic: (id: string, payload: { topic: string; score: number }) =>
+    request<StudyPlanDetail>(`/api/study/plans/${id}/reviews`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  resetStudyPlan: (id: string) =>
+    request<StudyPlanDetail>(`/api/study/plans/${id}/reset`, { method: 'POST' }),
+
+  startStudySession: (id: string) =>
+    request<Conversation>(`/api/study/plans/${id}/sessions`, { method: 'POST' }),
 
   exportBackupUrl: () => `${apiBase()}/api/backup/export`,
 

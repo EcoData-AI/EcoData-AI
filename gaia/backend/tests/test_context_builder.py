@@ -57,10 +57,12 @@ def test_skips_streaming_and_errored_messages():
 
 
 def test_drops_oldest_when_over_budget():
-    # A tiny window forces trimming; the most recent turns must survive.
+    # A tiny window forces trimming; the most recent turns must survive. 21
+    # messages so history ends on a user turn, as it always does in a real turn
+    # (`build_context` requires the new user message to be included).
     history = [
         make_message("user" if i % 2 == 0 else "assistant", "x" * 4000, i + 1)
-        for i in range(20)
+        for i in range(21)
     ]
     context = build_context(history=history, context_window=8_000)
 
@@ -128,7 +130,7 @@ def test_oldest_kept_sequence_is_none_when_nothing_is_dropped():
 def test_oldest_kept_sequence_marks_the_boundary_when_messages_are_dropped():
     history = [
         make_message("user" if i % 2 == 0 else "assistant", "x" * 4000, i + 1)
-        for i in range(20)
+        for i in range(21)  # ends on a user turn — see test_drops_oldest_when_over_budget
     ]
     context = build_context(history=history, context_window=8_000)
 

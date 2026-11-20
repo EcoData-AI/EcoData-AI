@@ -44,6 +44,19 @@ class ToolResult:
     error: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class ToolContext:
+    """What `chat_service` knows about the turn a tool is running in.
+
+    Most tools are conversation-agnostic by design and never see this (the
+    default `execute_with_context` drops it). The study tools are the
+    exception: "record progress in *this* course" only means something
+    relative to the conversation the tutor is running in.
+    """
+
+    conversation_id: str | None = None
+
+
 @dataclass(slots=True)
 class ToolSpec:
     """Provider-neutral tool description, handed to `LLMProvider.stream_chat`."""
@@ -79,3 +92,10 @@ class Tool(abc.ABC):
     @abc.abstractmethod
     async def execute(self, arguments: dict[str, Any]) -> ToolResult:
         """Run the tool. Must never raise — failures are a `ToolResult(ok=False, ...)`."""
+
+    async def execute_with_context(
+        self, arguments: dict[str, Any], context: ToolContext
+    ) -> ToolResult:
+        """What `chat_service` actually calls. Override only if the tool needs
+        to know which conversation it is running in; same never-raise rule."""
+        return await self.execute(arguments)

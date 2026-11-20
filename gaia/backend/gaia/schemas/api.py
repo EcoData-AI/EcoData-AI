@@ -37,6 +37,7 @@ class ConversationOut(BaseModel):
     model_id: str | None = None
     system_prompt: str | None = None
     project_id: str | None = None
+    study_plan_id: str | None = None
     pinned: bool
     archived: bool
     created_at: datetime
@@ -68,6 +69,8 @@ class ConversationUpdate(BaseModel):
     # py` special-cases this field instead of relying on the generic update —
     # see its own docstring/comment.
     project_id: str | None = None
+    # Same nullable-means-detach treatment as `project_id`.
+    study_plan_id: str | None = None
 
 
 class ChatRequest(BaseModel):
@@ -259,6 +262,71 @@ class DocumentOut(BaseModel):
     status: str
     chunk_count: int = 0
     created_at: datetime
+
+
+class StudyModuleIn(BaseModel):
+    title: str
+    topics: list[str]
+
+
+class StudyOutlineIn(BaseModel):
+    modules: list[StudyModuleIn]
+
+
+class StudyPlanCreate(BaseModel):
+    subject: str = Field(min_length=1, max_length=200)
+    goal: str | None = Field(default=None, max_length=2000)
+    #: `None` means "assess me": the tutor runs a diagnostic in the first session.
+    level: str | None = None
+    #: Omitted: the configured model generates one. Given: validated and used as-is.
+    outline: StudyOutlineIn | None = None
+
+
+class StudyPlanUpdate(BaseModel):
+    goal: str | None = Field(default=None, max_length=2000)
+    level: str | None = None
+    active: bool | None = None
+
+
+class StudyReviewCreate(BaseModel):
+    topic: str = Field(min_length=1, max_length=200)
+    score: int = Field(ge=0, le=5)
+    note: str | None = Field(default=None, max_length=500)
+
+
+class StudyTopicOut(BaseModel):
+    module: str
+    topic: str
+    mastery: float
+    attempts: int
+    mastered: bool
+    due: bool
+    last_score: int | None = None
+    last_note: str | None = None
+    last_reviewed_at: datetime | None = None
+    next_review_at: datetime | None = None
+
+
+class StudyPlanOut(BaseModel):
+    id: str
+    subject: str
+    goal: str | None = None
+    level: str | None = None
+    active: bool
+    created_at: datetime
+    updated_at: datetime
+    topic_count: int
+    mastered_count: int
+    due_count: int
+    #: The topic the tutor will focus on next; `None` once everything is mastered.
+    current_topic: str | None = None
+    #: Most recently active study session, so the Study screen can offer "Continue".
+    latest_conversation_id: str | None = None
+
+
+class StudyPlanDetail(StudyPlanOut):
+    outline: dict[str, Any]
+    topics: list[StudyTopicOut] = Field(default_factory=list)
 
 
 class TranscribeResponse(BaseModel):

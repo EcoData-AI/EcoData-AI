@@ -55,6 +55,11 @@ export function ChatView({ providerReady, providerHint, onOpenSettings }: Props)
       <header className="topbar">
         <div className="topbar__title">{active?.title ?? 'GAIA'}</div>
         <div className="topbar__meta">
+          {active?.study_plan_id && (
+            <span className="tag tag--ok" title="This conversation is a tutoring session">
+              study session
+            </span>
+          )}
           {active && (
             <select
               className="select"
@@ -90,18 +95,29 @@ export function ChatView({ providerReady, providerHint, onOpenSettings }: Props)
                 </div>
               </div>
             )}
-            <div className="empty">
-              <h2>Start a conversation</h2>
-              <p>
-                GAIA is a local-first assistant. Your conversations are stored on this machine,
-                not in the cloud.
-              </p>
-              <p style={{ color: 'var(--text-faint)', fontSize: 13 }}>
-                Chat, tools (calculator, Python, filesystem, terminal), voice, memory, projects
-                and documents are live. The rest of the roadmap isn't built yet, and GAIA will
-                say so rather than pretend.
-              </p>
-            </div>
+            {active?.study_plan_id ? (
+              <div className="empty">
+                <h2>Study session</h2>
+                <p>
+                  Say hello when you're ready. Your tutor picks up where the course stands — a
+                  short diagnostic if your level isn't assessed yet, then any reviews that are
+                  due, then the next topic.
+                </p>
+              </div>
+            ) : (
+              <div className="empty">
+                <h2>Start a conversation</h2>
+                <p>
+                  GAIA is a local-first assistant. Your conversations are stored on this machine,
+                  not in the cloud.
+                </p>
+                <p style={{ color: 'var(--text-faint)', fontSize: 13 }}>
+                  Chat, tools (calculator, Python, filesystem, terminal), voice, memory, projects,
+                  documents and study are live. The rest of the roadmap isn't built yet, and GAIA
+                  will say so rather than pretend.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       ) : (

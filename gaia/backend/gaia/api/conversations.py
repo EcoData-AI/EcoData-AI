@@ -11,7 +11,7 @@ from gaia.schemas.api import (
     ConversationUpdate,
     MessageOut,
 )
-from gaia.services import conversation_service
+from gaia.services import conversation_service, study_service
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 
@@ -81,6 +81,15 @@ def update_conversation(
     # this conversation from a project. Handle that one field directly.
     if "project_id" in fields:
         conversation.project_id = fields.pop("project_id")
+    # Same for `study_plan_id` (null detaches a study session from its course),
+    # plus a real existence check: unlike a stale project id, which the chat
+    # turn tolerates, attaching to a course that does not exist is a mistake
+    # worth reporting rather than storing.
+    if "study_plan_id" in fields:
+        plan_id = fields.pop("study_plan_id")
+        if plan_id is not None and study_service.get_plan(session, plan_id) is None:
+            raise HTTPException(status_code=404, detail="No such course.")
+        conversation.study_plan_id = plan_id
     conversation_service.update_conversation(session, conversation, **fields)
     return ConversationOut.model_validate(conversation)
 

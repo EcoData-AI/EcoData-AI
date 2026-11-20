@@ -35,8 +35,8 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability(
         "knowledge", "Documents", True, 5, "PDF/TXT/Markdown/CSV/code ingestion, BM25 retrieval."
     ),
-    Capability("tutor", "Tutor mode", False, 6, "Socratic teaching with spaced repetition."),
-    Capability("study", "Study", False, 6, "Subjects, courses, quizzes and progress."),
+    Capability("tutor", "Tutor mode", True, 6, "Socratic teaching with spaced repetition."),
+    Capability("study", "Study", True, 6, "Courses, level diagnostic, graded progress, reviews."),
     Capability("research", "Research", False, 7, "Web search, source evaluation, citations."),
     Capability("economics", "Economics engine", False, 8, "Formal models from plain-English asks."),
     Capability("game_theory", "Game theory engine", False, 8, "Nash equilibria, mixed strategies."),

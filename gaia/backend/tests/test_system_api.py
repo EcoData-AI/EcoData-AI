@@ -43,6 +43,9 @@ def test_capabilities_are_reported_honestly(client):
     assert capabilities["projects"]["available"] is True
     # Milestone 5: document ingestion and BM25 retrieval shipped.
     assert capabilities["knowledge"]["available"] is True
+    # Milestone 6: tutor and study (first slice) shipped.
+    assert capabilities["tutor"]["available"] is True
+    assert capabilities["study"]["available"] is True
 
     # None of these ship yet; the API must not claim otherwise.
     for key in ("research", "simulation"):
@@ -80,6 +83,8 @@ def test_system_status_reports_a_built_capability_as_ok(client):
     assert names["Memory"] == "ok"
     assert names["Projects"] == "ok"
     assert names["Documents"] == "ok"
+    assert names["Tutor mode"] == "ok"
+    assert names["Study"] == "ok"
 
 
 def test_privacy_dashboard_marks_cloud_inference(client):
@@ -128,6 +133,12 @@ def test_privacy_dashboard_reports_documents_as_shipped(client):
     # Milestone 5: documents must not still be listed NOT BUILT.
     rows = {row["label"]: row for row in client.get("/api/privacy").json()}
     assert rows["Documents"]["location"] == "LOCAL"
+
+
+def test_privacy_dashboard_reports_study_as_shipped(client):
+    # Milestone 6: courses and progress are stored, so the dashboard must say where.
+    rows = {row["label"]: row for row in client.get("/api/privacy").json()}
+    assert rows["Study"]["location"] == "LOCAL"
 
 
 def test_privacy_dashboard_lists_logs_and_backups(client):

@@ -13,6 +13,7 @@ from gaia.tools.calculator import CalculatorTool
 from gaia.tools.filesystem import FilesystemReadTool, FilesystemWriteTool
 from gaia.tools.memory import RememberTool
 from gaia.tools.python_sandbox import PythonSandboxTool
+from gaia.tools.study import RecordStudyProgressTool, SetStudyLevelTool, StartCourseTool
 from gaia.tools.terminal import TerminalTool
 
 TOOL_CLASSES: dict[str, type[Tool]] = {
@@ -22,6 +23,9 @@ TOOL_CLASSES: dict[str, type[Tool]] = {
     FilesystemWriteTool.name: FilesystemWriteTool,
     TerminalTool.name: TerminalTool,
     RememberTool.name: RememberTool,
+    StartCourseTool.name: StartCourseTool,
+    RecordStudyProgressTool.name: RecordStudyProgressTool,
+    SetStudyLevelTool.name: SetStudyLevelTool,
 }
 
 

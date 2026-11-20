@@ -248,6 +248,30 @@ Supported formats: PDF, TXT, Markdown, CSV, and a small allow-list of code exten
 
 ---
 
+## Study
+
+A tutoring session is an ordinary conversation with `study_plan_id` set — it then goes through
+`POST /api/chat` like any other turn, with the course injected into context (see
+`docs/ARCHITECTURE.md`, "Tutor and study").
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/study/plans` | Query param: `include_inactive` |
+| `POST` | `/api/study/plans` | `{subject, goal?, level?, outline?}`. Without `outline`, the configured model writes one and the request waits for it — `502` if the provider fails, `400` if its reply isn't a usable outline (nothing is stored either way). `level` is `beginner`/`intermediate`/`advanced`, or omitted to have the tutor assess it |
+| `GET` / `PATCH` / `DELETE` | `/api/study/plans/{id}` | `PATCH`: `{goal?, level?, active?}`. `DELETE` removes the course and its progress; its sessions stay as ordinary conversations |
+| `POST` | `/api/study/plans/{id}/reviews` | Self-graded review: `{topic, score: 0–5, note?}`. Same SM-2 path as the tutor's `record_study_progress` |
+| `POST` | `/api/study/plans/{id}/reset` | Clears every topic's progress; keeps the outline |
+| `POST` | `/api/study/plans/{id}/sessions` | Creates a new study-session conversation for the course |
+
+Plan responses carry `topic_count`, `mastered_count`, `due_count`, `current_topic` (the first
+not-yet-mastered topic in teaching order) and `latest_conversation_id`; the detail form adds the
+`outline` and per-topic `topics` (mastery, attempts, last score and note, next review, `due`).
+
+`PATCH /api/conversations/{id}` accepts `{"study_plan_id": "..."}` to attach a conversation to a
+course (`404` if the course doesn't exist) and `{"study_plan_id": null}` to detach it.
+
+---
+
 ## Backups
 
 | Method | Path | Notes |
@@ -261,7 +285,8 @@ Backups contain conversations and settings. They do **not** contain API keys.
 
 ## Endpoints that do not exist yet
 
-`/api/research`, `/api/simulations`, `/api/study` are named in the roadmap but **are not
+`/api/research` and `/api/simulations` are named in the roadmap but **are not
 implemented**. They return `404`. Check `/api/capabilities` rather than assuming. The tool-call
-loop itself is live (`/api/chat` and `/api/chat/tool-confirmations/{id}`, above), with six tools
-registered: calculator, python_sandbox, filesystem_read, filesystem_write, terminal, remember.
+loop itself is live (`/api/chat` and `/api/chat/tool-confirmations/{id}`, above), with nine tools
+registered: calculator, python_sandbox, filesystem_read, filesystem_write, terminal, remember,
+start_course, record_study_progress, set_study_level.

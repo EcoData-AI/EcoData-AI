@@ -13,7 +13,38 @@ const LISTING_ROW_LIMIT = 20
 
 type DisplayShape = Record<string, unknown>
 
+/** `start_course` is approved on the strength of its outline, so show the
+ * outline itself — a JSON blob is not something anyone can meaningfully
+ * approve. */
+function renderCourseProposal(args: Record<string, unknown>) {
+  const modules = Array.isArray(args.modules)
+    ? (args.modules as Array<{ title?: unknown; topics?: unknown }>)
+    : []
+  return (
+    <div className="tool-call__body">
+      <div>
+        <strong>{String(args.subject ?? 'Untitled course')}</strong>
+        {typeof args.level === 'string' && <span> — {args.level}</span>}
+      </div>
+      {typeof args.goal === 'string' && args.goal && (
+        <div style={{ color: 'var(--text-muted)' }}>Goal: {args.goal}</div>
+      )}
+      <ol className="tool-call__listing">
+        {modules.map((module, index) => (
+          <li key={index}>
+            {String(module.title ?? '')}
+            {Array.isArray(module.topics) && (
+              <span className="tool-call__size"> — {module.topics.map(String).join(' · ')}</span>
+            )}
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
 function renderArguments(call: ToolCallView) {
+  if (call.tool === 'start_course' && call.arguments) return renderCourseProposal(call.arguments)
   let text: string
   try {
     text = JSON.stringify(call.arguments)
@@ -94,6 +125,12 @@ function renderResult(call: ToolCallView) {
   if (call.tool === 'calculator') return renderCalculator(display)
   if (call.tool === 'filesystem_read') return renderFilesystemRead(display, call.content)
   if (call.tool === 'filesystem_write') return renderFilesystemWrite(display)
+  if (call.tool === 'start_course' || call.tool === 'record_study_progress') {
+    return <div className="tool-call__body">{call.content}</div>
+  }
+  if (call.tool === 'set_study_level') {
+    return <div className="tool-call__body">Level set to {String(display.level ?? '?')}</div>
+  }
   return null
 }
 

@@ -41,6 +41,11 @@ class Conversation(UUIDMixin, TimestampMixin, Base):
     project_id: Mapped[str | None] = mapped_column(
         ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # Set when this conversation is a tutoring session for a course (Milestone 6).
+    # SET NULL: deleting a course leaves its sessions as ordinary conversations.
+    study_plan_id: Mapped[str | None] = mapped_column(
+        ForeignKey("study_plans.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     provider_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     model_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     system_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -268,6 +273,14 @@ class SimulationRun(UUIDMixin, TimestampMixin, Base):
 
 
 class StudyPlan(UUIDMixin, TimestampMixin, Base):
+    """A course (Milestone 6).
+
+    `outline` is `{"modules": [{"title": str, "topics": [str, ...]}, ...]}`,
+    validated by `gaia.study.curriculum.validate_outline` before it is ever
+    stored. `level` is `None` until assessed — the tutor runs a short
+    diagnostic first and records the result.
+    """
+
     __tablename__ = "study_plans"
 
     subject: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -276,8 +289,16 @@ class StudyPlan(UUIDMixin, TimestampMixin, Base):
     outline: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
+    progress: Mapped[list[LearningProgress]] = relationship(
+        back_populates="study_plan", cascade="all, delete-orphan"
+    )
+
 
 class LearningProgress(UUIDMixin, TimestampMixin, Base):
+    """Per-topic progress and spaced-repetition state (SM-2, see
+    `gaia.study.scheduling`). A row exists only once a topic has been reviewed
+    at least once — an unstudied topic simply has no row."""
+
     __tablename__ = "learning_progress"
 
     study_plan_id: Mapped[str] = mapped_column(
@@ -290,6 +311,20 @@ class LearningProgress(UUIDMixin, TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     next_review_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # SM-2 state.
+    ease: Mapped[float] = mapped_column(Float, default=2.5, nullable=False)
+    interval_days: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    repetitions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    #: Most recent grade, 0–5.
+    last_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: The tutor's one-line note on the most recent attempt (a misconception, say).
+    last_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    study_plan: Mapped[StudyPlan] = relationship(back_populates="progress")
+
+    __table_args__ = (
+        UniqueConstraint("study_plan_id", "topic", name="uq_learning_progress_plan_topic"),
+    )
 
 
 class Permission(TimestampMixin, Base):

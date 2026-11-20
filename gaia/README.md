@@ -6,10 +6,11 @@ GAIA is software: a program that runs language models and tools on your behalf. 
 conscious and does not pretend to be. Your conversations, settings and data stay on your
 machine; you choose which model provider — cloud or fully local — answers your questions.
 
-> **Status: Beta v0.1 — Milestones 1–5 shipped.**
+> **Status: Beta v0.1 — Milestones 1–6 shipped.**
 > Chat, conversation history, model providers, tools (calculator, Python, filesystem, terminal),
-> voice (first slice), memory, projects, and documents (PDF/TXT/Markdown/CSV/code, retrieved by
-> BM25) all work. Research, tutoring and simulation are **not built yet**. GAIA says so plainly in
+> voice (first slice), memory, projects, documents (PDF/TXT/Markdown/CSV/code, retrieved by
+> BM25), and study (courses with a Socratic tutor and spaced repetition) all work. Research and
+> simulation are **not built yet**. GAIA says so plainly in
 > the interface and in conversation rather than pretending otherwise. See
 > [ROADMAP.md](docs/ROADMAP.md).
 
@@ -31,7 +32,7 @@ machine; you choose which model provider — cloud or fully local — answers yo
 | Memory — opt-in, CONFIRM-gated `remember` tool, an inspectable Memory screen | ✅ |
 | Projects — goals, tasks, project-scoped memory, project-aware context | ✅ |
 | Documents — PDF/TXT/Markdown/CSV/code, chunked, retrieved by BM25, cited in replies | ✅ |
-| Tutor · Study | ⛔ Milestone 6 |
+| Study — courses from "teach me X", level diagnostic, Socratic tutor, graded answers, SM-2 spaced repetition | ✅ |
 | Research | ⛔ Milestone 7 |
 | Economics · Game theory | ⛔ Milestone 8 |
 | Simulation Lab | ⛔ Milestone 9 |

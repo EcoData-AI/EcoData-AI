@@ -174,6 +174,14 @@ def privacy(session: Session = Depends(get_session)) -> list[PrivacyRow]:
             ),
         ),
         PrivacyRow(
+            label="Study",
+            location="LOCAL",
+            detail=(
+                "Courses, per-topic scores and review dates, in the same local database. Only "
+                "written inside a course you created; reset or delete it on the Study screen."
+            ),
+        ),
+        PrivacyRow(
             label="Python execution",
             location="LOCAL",
             detail="Isolated subprocess, requires your approval every time.",
